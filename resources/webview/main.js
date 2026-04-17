@@ -86,7 +86,26 @@
       buttonGrid.appendChild(hint);
       return;
     }
+    let currentSection;
+    let isFirst = true;
     buttons.forEach((b, index) => {
+      const section = b && typeof b.section === "string" ? b.section.trim() : "";
+      const normalized = section.length > 0 ? section : undefined;
+      if (normalized !== currentSection) {
+        currentSection = normalized;
+        if (normalized !== undefined) {
+          const header = document.createElement("div");
+          header.className = "section-header";
+          if (isFirst) header.classList.add("section-header-first");
+          header.textContent = normalized;
+          buttonGrid.appendChild(header);
+        } else if (!isFirst) {
+          const sep = document.createElement("div");
+          sep.className = "section-separator";
+          buttonGrid.appendChild(sep);
+        }
+      }
+      isFirst = false;
       const btn = document.createElement("button");
       btn.type = "button";
       btn.className = "action-btn";
@@ -155,17 +174,24 @@
 
   function setMetrics(id, metrics) {
     const bar = infobars.find((b) => Number(b.dataset.id) === Number(id));
-    if (!bar) return;
-    const apply = (field, value, prefix) => {
-      if (value === undefined || value === null) return;
-      const el = bar.querySelector(`[data-field="${field}"]`);
-      if (!el) return;
-      el.textContent = prefix ? `${prefix} ${value}` : String(value);
-    };
-    apply("model", metrics.model);
-    apply("ctx", metrics.ctx, "Ctx");
-    apply("cost", metrics.cost);
-    apply("mode", metrics.mode);
+    if (bar) {
+      const apply = (field, value, prefix) => {
+        if (value === undefined || value === null) return;
+        const el = bar.querySelector(`[data-field="${field}"]`);
+        if (!el) return;
+        el.textContent = prefix ? `${prefix} ${value}` : String(value);
+      };
+      apply("model", metrics.model);
+      apply("ctx", metrics.ctx, "Ctx");
+      apply("cost", metrics.cost);
+      apply("mode", metrics.mode);
+    }
+
+    // ctx>=70 → czerwona ramka i tło na tile (ostrzeżenie o pamięci)
+    if (typeof metrics.ctxPct === "number") {
+      const tile = tiles.find((t) => Number(t.dataset.id) === Number(id));
+      if (tile) tile.classList.toggle("is-ctx-warn", metrics.ctxPct >= 70);
+    }
   }
 
   window.addEventListener("message", (event) => {

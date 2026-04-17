@@ -64,22 +64,29 @@ export async function installHooks(extensionUri: vscode.Uri): Promise<void> {
 
   const existing = settings.statusLine;
   const statusChanged = existing?.command !== statusCmd;
+  let statusLineInstalled = false;
+  let statusLineKept = false;
   if (existing && statusChanged) {
     const choice = await vscode.window.showWarningMessage(
-      `W ~/.claude/settings.json istnieje statusLine:\n\n${existing.command}\n\nPodmienić na hook CC Panel?`,
+      `W ~/.claude/settings.json istnieje statusLine:\n\n${existing.command}\n\nCC Panel może podmienić go własnym hookiem (metryki model/ctx/cost w kafelkach) lub zachować Twój (metryki pozostaną puste; fazy working/waiting dalej działają).`,
       { modal: true },
       "Podmień (backup)",
-      "Anuluj"
+      "Zachowaj mój"
     );
-    if (choice !== "Podmień (backup)") return;
-
-    const backupPath = `${settingsPath}.bak-cc-panel-${Date.now()}`;
-    fs.copyFileSync(settingsPath, backupPath);
-    vscode.window.showInformationMessage(`CC Panel: backup → ${backupPath}`);
-  }
-
-  if (statusChanged) {
+    if (choice === "Podmień (backup)") {
+      const backupPath = `${settingsPath}.bak-cc-panel-${Date.now()}`;
+      fs.copyFileSync(settingsPath, backupPath);
+      vscode.window.showInformationMessage(`CC Panel: backup → ${backupPath}`);
+      settings.statusLine = { type: "command", command: statusCmd };
+      statusLineInstalled = true;
+    } else if (choice === "Zachowaj mój") {
+      statusLineKept = true;
+    } else {
+      return;
+    }
+  } else if (statusChanged) {
     settings.statusLine = { type: "command", command: statusCmd };
+    statusLineInstalled = true;
   }
 
   settings.hooks = settings.hooks ?? {};
@@ -96,10 +103,16 @@ export async function installHooks(extensionUri: vscode.Uri): Promise<void> {
     return;
   }
 
+  const statusNote = statusLineKept
+    ? " (statusLine: zachowany Twój — metryki model/ctx/cost w kafelkach pozostaną puste)"
+    : statusLineInstalled
+    ? " (statusLine: CC Panel)"
+    : "";
   vscode.window.showInformationMessage(
-    existedBefore
-      ? "CC Panel: hooki (statusLine, UserPromptSubmit, Stop) zainstalowane w ~/.claude/settings.json. Zrestartuj CC."
-      : "CC Panel: utworzono ~/.claude/settings.json z hookami. Zrestartuj CC."
+    (existedBefore
+      ? "CC Panel: hooki UserPromptSubmit, Stop zainstalowane w ~/.claude/settings.json. Zrestartuj CC."
+      : "CC Panel: utworzono ~/.claude/settings.json z hookami. Zrestartuj CC.") +
+      statusNote
   );
 }
 

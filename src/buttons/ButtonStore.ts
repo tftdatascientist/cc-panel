@@ -1,13 +1,19 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 
-export type ButtonActionType = "sendText" | "keystroke";
+export type ButtonActionType = "sendText" | "keystroke" | "vsCodeCommand";
+
+export interface ButtonStep {
+  type: ButtonActionType;
+  value: string;
+}
 
 export interface ButtonSpec {
   label: string;
-  type: ButtonActionType;
-  value: string;
+  type: ButtonActionType | "multiStep";
+  value: string | ButtonStep[];
   icon?: string;
+  section?: string;
 }
 
 export class ButtonStore implements vscode.Disposable {
@@ -28,6 +34,20 @@ export class ButtonStore implements vscode.Disposable {
 
   current(): ButtonSpec[] {
     return this.buttons;
+  }
+
+  async save(
+    buttons: ButtonSpec[],
+    target: vscode.ConfigurationTarget = vscode.ConfigurationTarget.Global
+  ): Promise<void> {
+    const config = vscode.workspace.getConfiguration("ccPanel");
+    const serialized = buttons.map((b) => {
+      const out: ButtonSpec = { label: b.label, type: b.type, value: b.value };
+      if (b.icon) out.icon = b.icon;
+      if (b.section) out.section = b.section;
+      return out;
+    });
+    await config.update("buttons", serialized, target);
   }
 
   dispose(): void {
@@ -66,16 +86,55 @@ export class ButtonStore implements vscode.Disposable {
     for (const item of raw) {
       if (!item || typeof item !== "object") continue;
       const obj = item as Record<string, unknown>;
-      if (typeof obj.label !== "string" || typeof obj.value !== "string") continue;
-      if (obj.type !== "sendText" && obj.type !== "keystroke") continue;
+      if (typeof obj.label !== "string") continue;
+      const type = obj.type;
+      if (
+        type !== "sendText" &&
+        type !== "keystroke" &&
+        type !== "vsCodeCommand" &&
+        type !== "multiStep"
+      )
+        continue;
+
+      let value: string | ButtonStep[];
+      if (type === "multiStep") {
+        if (!Array.isArray(obj.value)) continue;
+        const steps = validateSteps(obj.value);
+        if (steps.length === 0) continue;
+        value = steps;
+      } else {
+        if (typeof obj.value !== "string") continue;
+        value = obj.value;
+      }
+
       const spec: ButtonSpec = {
         label: obj.label,
-        type: obj.type,
-        value: obj.value,
+        type,
+        value,
       };
       if (typeof obj.icon === "string") spec.icon = obj.icon;
+      if (typeof obj.section === "string" && obj.section.trim().length > 0) {
+        spec.section = obj.section;
+      }
       out.push(spec);
     }
     return out;
   }
+}
+
+function validateSteps(raw: unknown[]): ButtonStep[] {
+  const steps: ButtonStep[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const obj = item as Record<string, unknown>;
+    if (typeof obj.value !== "string") continue;
+    if (
+      obj.type !== "sendText" &&
+      obj.type !== "keystroke" &&
+      obj.type !== "vsCodeCommand"
+    )
+      continue;
+    steps.push({ type: obj.type, value: obj.value });
+  }
+  return steps;
 }

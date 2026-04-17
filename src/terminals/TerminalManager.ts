@@ -18,7 +18,10 @@ export class TerminalManager implements vscode.Disposable {
     return [...this.terminals.keys()].sort((a, b) => a - b);
   }
 
-  create(id: number, viewColumn: vscode.ViewColumn): vscode.Terminal {
+  create(
+    id: number,
+    location: vscode.ViewColumn | { parentTerminal: vscode.Terminal }
+  ): vscode.Terminal {
     const existing = this.terminals.get(id);
     if (existing) {
       existing.terminal.show(true);
@@ -44,7 +47,12 @@ export class TerminalManager implements vscode.Disposable {
         }
         env.CC_PANEL_TERMINAL_ID = String(id);
 
-        const { shellFile, shellArgs } = resolveShell();
+        const command =
+          vscode.workspace
+            .getConfiguration("ccPanel")
+            .get<string>("command")
+            ?.trim() || "claude";
+        const { shellFile, shellArgs } = resolveShell(command);
         ptyProcess = pty.spawn(shellFile, shellArgs, {
           name: "xterm-256color",
           cols,
@@ -74,11 +82,17 @@ export class TerminalManager implements vscode.Disposable {
       },
     };
 
+    const terminalLocation =
+      typeof location === "object" && "parentTerminal" in location
+        ? { parentTerminal: location.parentTerminal }
+        : { viewColumn: location, preserveFocus: true };
+
     const terminal = vscode.window.createTerminal({
       name: `CC #${id}`,
       pty: pseudoterminal,
       iconPath: new vscode.ThemeIcon("terminal"),
-      location: { viewColumn, preserveFocus: true },
+      color: new vscode.ThemeColor(`ccPanel.terminal.t${id}`),
+      location: terminalLocation,
     });
 
     const closeSub = vscode.window.onDidCloseTerminal((t) => {
@@ -129,10 +143,10 @@ export class TerminalManager implements vscode.Disposable {
   }
 }
 
-function resolveShell(): { shellFile: string; shellArgs: string[] } {
+function resolveShell(command: string): { shellFile: string; shellArgs: string[] } {
   if (process.platform === "win32") {
     const comspec = process.env.ComSpec ?? "cmd.exe";
-    return { shellFile: comspec, shellArgs: ["/c", "cc"] };
+    return { shellFile: comspec, shellArgs: ["/c", command] };
   }
-  return { shellFile: "cc", shellArgs: [] };
+  return { shellFile: command, shellArgs: [] };
 }

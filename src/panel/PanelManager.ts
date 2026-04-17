@@ -137,9 +137,7 @@ export class PanelManager implements vscode.Disposable {
       terminals: this.terminals,
       activeId: this.activeId,
     });
-    if (this.buttons.length > 0) {
-      this.post({ type: "setButtons", buttons: this.buttons });
-    }
+    this.post({ type: "setButtons", buttons: this.buttons });
     if (this.messages.length > 0) {
       this.post({ type: "setMessages", messages: this.messages });
     }

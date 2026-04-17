@@ -12,7 +12,12 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const terminalId = String(process.env.CC_PANEL_TERMINAL_ID || "0");
+const terminalId = String(process.env.CC_PANEL_TERMINAL_ID || "");
+if (!/^[1-4]$/.test(terminalId)) {
+  // sesja nie jest spawnowana przez cc-panel — cichy no-op (bez stdout, żeby nie łamać
+  // custom statusLine users i tak mają od Anthropic lub ccstatusline).
+  process.exit(0);
+}
 const stateDir = path.join(os.homedir(), ".claude", "cc-panel");
 const statePath = path.join(stateDir, `state.${terminalId}.json`);
 
@@ -40,6 +45,17 @@ process.stdin.on("end", () => {
   const mode = input.output_style || input.mode || "default";
   const tokenUsage = input.token_usage || input.usage || {};
 
+  // Wszystkie Claude 4.x mają okno 200k — ctx_pct = suma wejściowych tokenów / 200k.
+  const CONTEXT_WINDOW = 200_000;
+  const inputTotal =
+    (Number(tokenUsage.input_tokens) || 0) +
+    (Number(tokenUsage.cache_read_input_tokens) || 0) +
+    (Number(tokenUsage.cache_creation_input_tokens) || 0);
+  const ctxPct =
+    inputTotal > 0
+      ? Math.min(100, Math.round((inputTotal / CONTEXT_WINDOW) * 100))
+      : undefined;
+
   const state = {
     updated_at: new Date().toISOString(),
     terminal_id: Number(terminalId) || 0,
@@ -48,6 +64,7 @@ process.stdin.on("end", () => {
     mode,
     session_id: input.session_id || null,
     token_usage: tokenUsage,
+    ctx_pct: ctxPct,
     raw: input,
   };
 
@@ -59,5 +76,6 @@ process.stdin.on("end", () => {
   }
 
   const costStr = typeof costUsd === "number" ? ` $${costUsd.toFixed(2)}` : "";
-  process.stdout.write(`T${terminalId} ${model}${costStr}`);
+  const ctxStr = typeof ctxPct === "number" ? ` ctx:${ctxPct}%` : "";
+  process.stdout.write(`T${terminalId} ${model}${costStr}${ctxStr}`);
 });

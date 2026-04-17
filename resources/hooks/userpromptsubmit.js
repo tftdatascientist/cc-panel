@@ -6,7 +6,11 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
-const terminalId = String(process.env.CC_PANEL_TERMINAL_ID || "0");
+const terminalId = String(process.env.CC_PANEL_TERMINAL_ID || "");
+if (!/^[1-4]$/.test(terminalId)) {
+  // sesja nie jest spawnowana przez cc-panel — cichy no-op
+  process.exit(0);
+}
 const stateDir = path.join(os.homedir(), ".claude", "cc-panel");
 const statePath = path.join(stateDir, `state.${terminalId}.json`);
 

@@ -5,12 +5,14 @@ export interface TerminalMetrics {
   model?: string;
   cost?: string;
   ctx?: string;
+  ctxPct?: number;
   mode?: string;
 }
 
 export interface ButtonViewSpec {
   label: string;
   icon?: string;
+  section?: string;
 }
 
 export interface MessageItem {

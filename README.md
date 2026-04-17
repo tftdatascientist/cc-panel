@@ -2,16 +2,16 @@
 
 Rozszerzenie VS Code do równoległej obsługi **1-4 sesji Claude Code** z graficznego panelu sterowania w obszarze edytora.
 
-![status](https://img.shields.io/badge/status-MVP%20in%20progress-yellow) ![platform](https://img.shields.io/badge/platform-VS%20Code%20%E2%89%A5%201.85-blue) ![language](https://img.shields.io/badge/lang-TypeScript-3178c6)
+![status](https://img.shields.io/badge/status-MVP%20code%20complete-brightgreen) ![platform](https://img.shields.io/badge/platform-VS%20Code%20%E2%89%A5%201.85-blue) ![language](https://img.shields.io/badge/lang-TypeScript-3178c6)
 
 ## Co robi
 
 - Spawnuje do 4 instancji `cc` (Claude Code CLI) w tej samej grupie edytora przez `node-pty`.
 - Renderuje nad terminalami webview panel z layoutem 20/60/20:
-  - **Góra** — 4 status tiles (faza `idle` / `working` / `waiting` + timer od ostatniej zmiany fazy).
-  - **Środek** — grid przycisków akcji (slash-command, keystroke) | feed wiadomości ze wszystkich terminali.
-  - **Dół** — 4 paski info z modelem / kosztem / Ctx% / trybem per terminal.
-- Ramka panelu w kolorze aktywnego terminala (T1 teal, T2 amber, T3 purple, T4 coral).
+  - **Góra** — 4 status tiles (faza `idle` / `working` / `waiting` + timer od ostatniej zmiany fazy; czerwony border gdy ctx≥70%).
+  - **Środek** — grid przycisków akcji (`sendText` / `keystroke` / `vsCodeCommand`) | feed wiadomości ze wszystkich terminali.
+  - **Dół** — 4 paski info z modelem / Ctx% / kosztem / trybem per terminal.
+- Ramka panelu w kolorze aktywnego terminala (T1 teal, T2 amber, T3 purple, T4 coral); cyklowanie przez `Ctrl+Alt+Tab`.
 - Każda instancja CC dostaje env `CC_PANEL_TERMINAL_ID=1..4` — identyfikacja w hookach.
 - Hooki CC (`statusLine`, `UserPromptSubmit`, `Stop`) zapisują stan per terminal do `~/.claude/cc-panel/state.{id}.json`; ekstensja czyta przez `chokidar`.
 
@@ -21,18 +21,19 @@ Szczegóły w [`ARCHITECTURE.md`](./ARCHITECTURE.md). Skrótowo:
 
 ```
 VS Code Extension Host
-├── extension.ts         — activate/deactivate, komendy
+├── extension.ts         — activate/deactivate, komendy, routing zdarzeń
 ├── TerminalManager      — node-pty spawn, map id→pty, onTerminalsChanged
-├── PanelManager         — WebviewPanel, post/receive, buffer messages
+├── PanelManager         — WebviewPanel, post/receive, buffer messages (rolling 100)
 ├── StateWatcher         — chokidar on ~/.claude/cc-panel/state.*.json
-├── ButtonStore          — config ccPanel.buttons ∨ resources/default-buttons.json
-├── Actions              — sendText / keystroke → pty.write
+├── ButtonStore          — config ccPanel.buttons ∨ resources/default-buttons.json; save(target)
+├── EditButton           — wizard QuickPick/InputBox + pickTarget (Global|Workspace)
+├── Actions              — sendText / keystroke / vsCodeCommand → pty.write | commands.executeCommand
 └── installHooks         — upsert w ~/.claude/settings.json
 
 resources/
-├── hooks/               — statusline.js, userpromptsubmit.js, stop.js
+├── hooks/               — statusline.js (liczy ctx_pct), userpromptsubmit.js, stop.js
 ├── webview/             — index.html, styles.css, main.js (vanilla)
-└── default-buttons.json — 8 slash-command buttons (/clear, /compact, …)
+└── default-buttons.json — 11 buttonów (8 slash + Esc/Ctrl+C/Shift+Tab)
 ```
 
 **Źródło prawdy metryk** — `statusLine` hook CC. Parsowanie ANSI z terminala zabronione.
@@ -60,31 +61,40 @@ Po uruchomieniu:
 
 ## Komendy
 
-| Komenda | Opis |
-|---------|------|
-| `ccPanel.open` | Otwiera/pokazuje panel i spawnuje T1 |
-| `ccPanel.addTerminal` | Spawnuje pierwszy wolny terminal (2→3→4) |
-| `ccPanel.installHooks` | Wpisuje hooki CC do `~/.claude/settings.json` |
+| Komenda | Opis | Keybinding |
+|---------|------|-----------|
+| `ccPanel.open` | Otwiera/pokazuje panel i spawnuje T1 | — |
+| `ccPanel.addTerminal` | Spawnuje pierwszy wolny terminal (2→3→4) | — |
+| `ccPanel.cycleActive` | Cykluje aktywny terminal T1→T2→T3→T4→T1 | `Ctrl+Alt+Tab` |
+| `ccPanel.editButton` | Wizard edycji `ccPanel.buttons` (add / edit / delete) | — |
+| `ccPanel.installHooks` | Wpisuje hooki CC do `~/.claude/settings.json` | — |
 
 ## Konfiguracja przycisków
 
-`settings.json` (User lub Workspace):
+Najwygodniej przez `Ctrl+Shift+P → CC Panel: Edit Buttons` — wizard prowadzi przez label/typ/wartość/ikonę i pyta gdzie zapisać (Global ∨ Workspace).
+
+Można też edytować `settings.json` ręcznie:
 
 ```json
 {
   "ccPanel.buttons": [
-    { "label": "Clear", "type": "sendText", "value": "/clear" },
-    { "label": "Compact", "type": "sendText", "value": "/compact" },
-    { "label": "Esc", "type": "keystroke", "value": "\u001b" }
+    { "label": "Clear",   "type": "sendText",      "value": "/clear" },
+    { "label": "Esc",     "type": "keystroke",     "value": "\u001b" },
+    { "label": "Save",    "type": "vsCodeCommand", "value": "workbench.action.files.save" }
   ]
 }
 ```
 
-Typy:
-- `sendText` — `pty.write(value + '\r')` do aktywnego terminala
-- `keystroke` — `pty.write(value)` bez CR (dla Esc, Ctrl+C, Shift+Tab itd.)
+Typy akcji:
+- `sendText` — `pty.write(value + '\r')` do aktywnego terminala (slash-commands CC, dowolny tekst)
+- `keystroke` — `pty.write(value)` bez CR; wspiera escape `\u001b`, `\x1b`, `\n`, `\r`, `\t` w wizardzie (dla Esc, Ctrl+C, Shift+Tab itd.)
+- `vsCodeCommand` — `vscode.commands.executeCommand(value)`; binduje dowolną komendę VS Code (np. zapis pliku, format, toggle panelu)
 
-Pusta lista → fallback do [`resources/default-buttons.json`](./resources/default-buttons.json).
+Pusta lista → fallback do [`resources/default-buttons.json`](./resources/default-buttons.json) (11 buttonów: 8 slash-commands + Esc / Ctrl+C / Shift+Tab).
+
+Target zapisu:
+- **Global** (User Settings) — synchronizuje się przez Settings Sync, dotyczy wszystkich projektów
+- **Workspace** (`.vscode/settings.json`) — nadpisuje global tylko w tym projekcie
 
 ## Stan fazowy
 
@@ -99,9 +109,13 @@ Zobacz [`STATUS.md`](./STATUS.md) — aktualna faza rozwoju, co jest potwierdzon
 | 4 | UserPromptSubmit/Stop + tile timer | 🟡 code done |
 | 5 | button grid + sendText | 🟡 code done |
 | 6 | 1-4 terminali + messages feed | 🟡 code done |
-| 7 | `ccPanel.cycleActive` + keybinding | ⬜ |
-| 8 | akcja `keystroke` (Esc, Ctrl+C, Shift+Tab) | ⬜ |
-| 9 | edytor przycisków (modal) + persistence | ⬜ |
+| 7 | `ccPanel.cycleActive` + keybinding `Ctrl+Alt+Tab` | 🟡 code done |
+| 8 | akcja `keystroke` (Esc, Ctrl+C, Shift+Tab) | 🟡 code done |
+| 9 | edytor przycisków (wizard) + persistence | 🟡 code done |
+| Post-MVP iter 1 | ctx≥70% red tile + `vsCodeCommand` + per-workspace target | 🟡 code done |
+| Post-MVP iter 2 | `promptTemplate` z placeholderami | ⬜ |
+| Post-MVP iter 3 | `multiStep` (sekwencje akcji) | ⬜ |
+| Post-MVP iter 4 | grupowanie/sekcje przycisków | ⬜ |
 
 ## Pliki stanu
 

@@ -12,6 +12,7 @@ export interface TerminalState {
   mode?: string;
   session_id?: string | null;
   token_usage?: Record<string, unknown>;
+  ctx_pct?: number;
   phase?: "idle" | "working" | "waiting" | "red";
   phase_changed_at?: string;
   last_message?: string;

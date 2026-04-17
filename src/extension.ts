@@ -6,6 +6,7 @@ import { StateWatcher, TerminalState } from "./state/StateWatcher";
 import { installHooks } from "./hooks/installHooks";
 import { ButtonStore } from "./buttons/ButtonStore";
 import { Actions } from "./buttons/Actions";
+import { runEditButton } from "./buttons/EditButton";
 
 const TERMINAL_IDS: TerminalId[] = [1, 2, 3, 4];
 
@@ -39,18 +40,22 @@ export function activate(context: vscode.ExtensionContext): void {
     onInvokeButton: (index) => {
       const btn = buttonStore?.current()[index];
       if (!btn) return;
-      const ok = actions?.execute(btn, activeTerminalId);
-      if (!ok) {
-        vscode.window.showWarningMessage(
-          `CC Panel: terminal T${activeTerminalId} nieaktywny — przycisk "${btn.label}" nie wysłany.`
-        );
-      }
+      void (async () => {
+        const result = await actions?.execute(btn, activeTerminalId);
+        if (result === "noTerminal") {
+          vscode.window.showWarningMessage(
+            `CC Panel: terminal T${activeTerminalId} nieaktywny — przycisk "${btn.label}" nie wysłany.`
+          );
+        }
+      })();
     },
   });
   context.subscriptions.push(panelManager);
 
   buttonStore.onChange((buttons) => {
-    panelManager?.setButtons(buttons.map(({ label, icon }) => ({ label, icon })));
+    panelManager?.setButtons(
+      buttons.map(({ label, icon, section }) => ({ label, icon, section }))
+    );
   });
 
   stateWatcher.onChange((state) => onStateChange(state));
@@ -77,7 +82,11 @@ export function activate(context: vscode.ExtensionContext): void {
       activeTerminalId = 1;
       panelManager!.setActive(1);
       panelManager!.setButtons(
-        (buttonStore?.current() ?? []).map(({ label, icon }) => ({ label, icon }))
+        (buttonStore?.current() ?? []).map(({ label, icon, section }) => ({
+          label,
+          icon,
+          section,
+        }))
       );
       panelManager!.reveal();
     })
@@ -93,6 +102,19 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       await addTerminal(next);
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ccPanel.cycleActive", () => {
+      cycleActiveTerminal();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ccPanel.editButton", async () => {
+      if (!buttonStore) return;
+      await runEditButton(buttonStore);
     })
   );
 
@@ -127,7 +149,10 @@ async function addTerminal(id: TerminalId): Promise<void> {
     terminalManager.get(id)?.show(false);
     return;
   }
-  const terminal = terminalManager.create(id, vscode.ViewColumn.Two);
+  const parent = terminalManager.get(1);
+  const terminal = parent
+    ? terminalManager.create(id, { parentTerminal: parent })
+    : terminalManager.create(id, vscode.ViewColumn.Two);
   terminal.show(false);
   activeTerminalId = id;
   panelManager?.setActive(id);
@@ -138,6 +163,17 @@ function nextFreeTerminalId(): TerminalId | undefined {
     if (!terminalManager.get(id)) return id;
   }
   return undefined;
+}
+
+function cycleActiveTerminal(): void {
+  const ids = terminalManager.activeIds().filter(isTerminalId) as TerminalId[];
+  if (ids.length === 0) return;
+  const currentIdx = ids.indexOf(activeTerminalId);
+  const next = currentIdx === -1 ? ids[0] : ids[(currentIdx + 1) % ids.length];
+  if (next === activeTerminalId && ids.length === 1) return;
+  activeTerminalId = next;
+  terminalManager.get(next)?.show(false);
+  panelManager?.setActive(next);
 }
 
 function onStateChange(state: TerminalState): void {
@@ -151,6 +187,9 @@ function onStateChange(state: TerminalState): void {
       typeof state.cost_usd === "number"
         ? `$${state.cost_usd.toFixed(2)}`
         : undefined,
+    ctx:
+      typeof state.ctx_pct === "number" ? `${state.ctx_pct}%` : undefined,
+    ctxPct: typeof state.ctx_pct === "number" ? state.ctx_pct : undefined,
     mode: state.mode,
   });
 

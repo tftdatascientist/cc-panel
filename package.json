@@ -24,25 +24,83 @@
         "title": "CC Panel: Add Terminal"
       },
       {
+        "command": "ccPanel.cycleActive",
+        "title": "CC Panel: Cycle Active Terminal"
+      },
+      {
+        "command": "ccPanel.editButton",
+        "title": "CC Panel: Edit Buttons"
+      },
+      {
         "command": "ccPanel.installHooks",
         "title": "CC Panel: Install Hooks"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ccPanel.cycleActive",
+        "key": "ctrl+alt+tab",
+        "mac": "cmd+alt+tab"
+      }
+    ],
+    "colors": [
+      {
+        "id": "ccPanel.terminal.t1",
+        "description": "CC Panel — kolor terminala T1 (ikona w tabie).",
+        "defaults": { "dark": "#14b8a6", "light": "#14b8a6", "highContrast": "#14b8a6" }
+      },
+      {
+        "id": "ccPanel.terminal.t2",
+        "description": "CC Panel — kolor terminala T2 (ikona w tabie).",
+        "defaults": { "dark": "#f59e0b", "light": "#f59e0b", "highContrast": "#f59e0b" }
+      },
+      {
+        "id": "ccPanel.terminal.t3",
+        "description": "CC Panel — kolor terminala T3 (ikona w tabie).",
+        "defaults": { "dark": "#a78bfa", "light": "#a78bfa", "highContrast": "#a78bfa" }
+      },
+      {
+        "id": "ccPanel.terminal.t4",
+        "description": "CC Panel — kolor terminala T4 (ikona w tabie).",
+        "defaults": { "dark": "#fb7185", "light": "#fb7185", "highContrast": "#fb7185" }
       }
     ],
     "configuration": {
       "title": "CC Panel",
       "properties": {
+        "ccPanel.command": {
+          "type": "string",
+          "default": "claude",
+          "description": "Komenda CLI spawnowana w każdym terminalu (np. 'claude', 'cc'). Musi być widoczna w PATH z poziomu cmd.exe (Windows) / sh (macOS/Linux)."
+        },
         "ccPanel.buttons": {
           "type": "array",
           "default": [],
-          "description": "Przyciski panelu (nadpisuje resources/default-buttons.json). Każdy wpis: { label, type: 'sendText' | 'keystroke', value, icon? }.",
+          "description": "Przyciski panelu (nadpisuje resources/default-buttons.json). Każdy wpis: { label, type: 'sendText' | 'keystroke' | 'vsCodeCommand' | 'multiStep', value, icon?, section? }. Dla multiStep value jest tablicą obiektów { type, value }.",
           "items": {
             "type": "object",
             "required": ["label", "type", "value"],
             "properties": {
               "label": { "type": "string" },
-              "type": { "type": "string", "enum": ["sendText", "keystroke"] },
-              "value": { "type": "string" },
-              "icon": { "type": "string" }
+              "type": { "type": "string", "enum": ["sendText", "keystroke", "vsCodeCommand", "multiStep"] },
+              "value": {
+                "oneOf": [
+                  { "type": "string" },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["type", "value"],
+                      "properties": {
+                        "type": { "type": "string", "enum": ["sendText", "keystroke", "vsCodeCommand"] },
+                        "value": { "type": "string" }
+                      }
+                    }
+                  }
+                ]
+              },
+              "icon": { "type": "string" },
+              "section": { "type": "string", "description": "Opcjonalna sekcja — kolejne przyciski z tą samą wartością grupują się pod wspólnym nagłówkiem." }
             }
           }
         }
