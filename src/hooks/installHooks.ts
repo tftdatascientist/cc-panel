@@ -1,0 +1,136 @@
+import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+
+interface StatusLineConfig {
+  type: string;
+  command: string;
+}
+
+interface HookCommand {
+  type: string;
+  command: string;
+}
+
+interface HookEntry {
+  matcher?: string;
+  hooks?: HookCommand[];
+}
+
+interface ClaudeSettings {
+  statusLine?: StatusLineConfig;
+  hooks?: Record<string, HookEntry[]>;
+  [k: string]: unknown;
+}
+
+const EVENTS = ["UserPromptSubmit", "Stop"] as const;
+type HookEvent = (typeof EVENTS)[number];
+
+export async function installHooks(extensionUri: vscode.Uri): Promise<void> {
+  const hooksRoot = vscode.Uri.joinPath(extensionUri, "resources", "hooks").fsPath;
+
+  const statuslinePath = path.join(hooksRoot, "statusline.js");
+  const upsPath = path.join(hooksRoot, "userpromptsubmit.js");
+  const stopPath = path.join(hooksRoot, "stop.js");
+
+  for (const p of [statuslinePath, upsPath, stopPath]) {
+    if (!fs.existsSync(p)) {
+      vscode.window.showErrorMessage(
+        `CC Panel: brak hook script ${p} — przebuduj rozszerzenie.`
+      );
+      return;
+    }
+  }
+
+  const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+  let settings: ClaudeSettings = {};
+  let existedBefore = false;
+  if (fs.existsSync(settingsPath)) {
+    existedBefore = true;
+    try {
+      settings = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as ClaudeSettings;
+    } catch (err) {
+      vscode.window.showErrorMessage(
+        `CC Panel: ~/.claude/settings.json nie jest poprawnym JSON (${(err as Error).message}). Popraw ręcznie.`
+      );
+      return;
+    }
+  }
+
+  const statusCmd = cmdFor(statuslinePath);
+  const upsCmd = cmdFor(upsPath);
+  const stopCmd = cmdFor(stopPath);
+
+  const existing = settings.statusLine;
+  const statusChanged = existing?.command !== statusCmd;
+  if (existing && statusChanged) {
+    const choice = await vscode.window.showWarningMessage(
+      `W ~/.claude/settings.json istnieje statusLine:\n\n${existing.command}\n\nPodmienić na hook CC Panel?`,
+      { modal: true },
+      "Podmień (backup)",
+      "Anuluj"
+    );
+    if (choice !== "Podmień (backup)") return;
+
+    const backupPath = `${settingsPath}.bak-cc-panel-${Date.now()}`;
+    fs.copyFileSync(settingsPath, backupPath);
+    vscode.window.showInformationMessage(`CC Panel: backup → ${backupPath}`);
+  }
+
+  if (statusChanged) {
+    settings.statusLine = { type: "command", command: statusCmd };
+  }
+
+  settings.hooks = settings.hooks ?? {};
+  upsertHook(settings.hooks, "UserPromptSubmit", upsCmd, upsPath);
+  upsertHook(settings.hooks, "Stop", stopCmd, stopPath);
+
+  try {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+  } catch (err) {
+    vscode.window.showErrorMessage(
+      `CC Panel: zapis ${settingsPath} nieudany — ${(err as Error).message}`
+    );
+    return;
+  }
+
+  vscode.window.showInformationMessage(
+    existedBefore
+      ? "CC Panel: hooki (statusLine, UserPromptSubmit, Stop) zainstalowane w ~/.claude/settings.json. Zrestartuj CC."
+      : "CC Panel: utworzono ~/.claude/settings.json z hookami. Zrestartuj CC."
+  );
+}
+
+function cmdFor(scriptPath: string): string {
+  return `node "${scriptPath}"`;
+}
+
+function upsertHook(
+  hooks: Record<string, HookEntry[]>,
+  event: HookEvent,
+  command: string,
+  scriptPath: string
+): void {
+  const scriptName = path.basename(scriptPath);
+  const list = hooks[event] ?? [];
+  const cleaned: HookEntry[] = [];
+  for (const entry of list) {
+    const innerHooks = (entry.hooks ?? []).filter(
+      (h) => !(h.command ?? "").includes(scriptName)
+    );
+    if (innerHooks.length > 0) {
+      cleaned.push({ matcher: entry.matcher ?? "", hooks: innerHooks });
+    } else if (entry.hooks && entry.hooks.length === 0 && !entry.matcher) {
+      // pusty wpis — pomijamy
+    } else if (!entry.hooks) {
+      cleaned.push(entry);
+    }
+  }
+  cleaned.push({
+    matcher: "",
+    hooks: [{ type: "command", command }],
+  });
+  hooks[event] = cleaned;
+}

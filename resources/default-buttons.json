@@ -1,0 +1,10 @@
+[
+  { "label": "Clear",    "type": "sendText", "value": "/clear" },
+  { "label": "Compact",  "type": "sendText", "value": "/compact" },
+  { "label": "Status",   "type": "sendText", "value": "/status" },
+  { "label": "Model",    "type": "sendText", "value": "/model" },
+  { "label": "Cost",     "type": "sendText", "value": "/cost" },
+  { "label": "Help",     "type": "sendText", "value": "/help" },
+  { "label": "Resume",   "type": "sendText", "value": "/resume" },
+  { "label": "Review",   "type": "sendText", "value": "/review" }
+]

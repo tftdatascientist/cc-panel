@@ -1,0 +1,68 @@
+{
+  "name": "cc-panel",
+  "displayName": "CC Panel",
+  "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
+  "version": "0.0.1",
+  "publisher": "local-dev",
+  "private": true,
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ccPanel.open",
+        "title": "CC Panel: Open"
+      },
+      {
+        "command": "ccPanel.addTerminal",
+        "title": "CC Panel: Add Terminal"
+      },
+      {
+        "command": "ccPanel.installHooks",
+        "title": "CC Panel: Install Hooks"
+      }
+    ],
+    "configuration": {
+      "title": "CC Panel",
+      "properties": {
+        "ccPanel.buttons": {
+          "type": "array",
+          "default": [],
+          "description": "Przyciski panelu (nadpisuje resources/default-buttons.json). Każdy wpis: { label, type: 'sendText' | 'keystroke', value, icon? }.",
+          "items": {
+            "type": "object",
+            "required": ["label", "type", "value"],
+            "properties": {
+              "label": { "type": "string" },
+              "type": { "type": "string", "enum": ["sendText", "keystroke"] },
+              "value": { "type": "string" },
+              "icon": { "type": "string" }
+            }
+          }
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "node esbuild.config.js --production",
+    "build": "node esbuild.config.js",
+    "watch": "node esbuild.config.js --watch",
+    "compile-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "node-pty": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.19.11",
+    "typescript": "^5.3.3"
+  }
+}

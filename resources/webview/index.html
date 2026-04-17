@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src {{CSP_SOURCE}} 'unsafe-inline'; script-src 'nonce-{{NONCE}}'; img-src {{CSP_SOURCE}} data:; font-src {{CSP_SOURCE}};" />
+  <title>CC Panel</title>
+  <link rel="stylesheet" href="{{STYLES_URI}}" />
+</head>
+<body data-active="1">
+  <div id="frame" class="frame frame-t1">
+
+    <!-- TOP: 4 status tiles (20% height) -->
+    <section class="row row-top" aria-label="Status tiles">
+      <button class="tile tile-t1 is-active" data-id="1" type="button">
+        <span class="tile-label">T1</span>
+        <span class="tile-phase">idle</span>
+        <span class="tile-timer">0s</span>
+      </button>
+      <button class="tile tile-t2 is-disabled" data-id="2" type="button" disabled>
+        <span class="tile-label">T2</span>
+        <span class="tile-phase">–</span>
+        <span class="tile-timer"></span>
+      </button>
+      <button class="tile tile-t3 is-disabled" data-id="3" type="button" disabled>
+        <span class="tile-label">T3</span>
+        <span class="tile-phase">–</span>
+        <span class="tile-timer"></span>
+      </button>
+      <button class="tile tile-t4 is-disabled" data-id="4" type="button" disabled>
+        <span class="tile-label">T4</span>
+        <span class="tile-phase">–</span>
+        <span class="tile-timer"></span>
+      </button>
+    </section>
+
+    <!-- MIDDLE: buttons | messages (60% height) -->
+    <section class="row row-mid" aria-label="Controls">
+      <div class="pane pane-buttons">
+        <div class="pane-header">Actions</div>
+        <div class="button-grid" id="button-grid">
+          <div class="empty-hint">Brak przycisków (Phase 5)</div>
+        </div>
+      </div>
+      <div class="pane pane-messages">
+        <div class="pane-header">Messages</div>
+        <div class="messages-feed" id="messages-feed">
+          <div class="empty-hint">Brak wiadomości</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BOTTOM: 4 info bars (20% height) -->
+    <section class="row row-bottom" aria-label="Metrics">
+      <div class="infobar infobar-t1" data-id="1">
+        <span class="bar-label">T1</span>
+        <span class="bar-metric" data-field="model">–</span>
+        <span class="bar-metric" data-field="ctx">Ctx –</span>
+        <span class="bar-metric" data-field="cost">$–</span>
+        <span class="bar-metric" data-field="mode">–</span>
+      </div>
+      <div class="infobar infobar-t2 is-disabled" data-id="2">
+        <span class="bar-label">T2</span>
+        <span class="bar-metric">–</span>
+      </div>
+      <div class="infobar infobar-t3 is-disabled" data-id="3">
+        <span class="bar-label">T3</span>
+        <span class="bar-metric">–</span>
+      </div>
+      <div class="infobar infobar-t4 is-disabled" data-id="4">
+        <span class="bar-label">T4</span>
+        <span class="bar-metric">–</span>
+      </div>
+    </section>
+
+  </div>
+
+  <script nonce="{{NONCE}}" src="{{MAIN_URI}}"></script>
+</body>
+</html>
