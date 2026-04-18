@@ -26,10 +26,12 @@ process.stdin.on("error", () => update());
 
 function update() {
   let lastMessage;
+  let transcriptPath;
   try {
     const payload = stdinBuf ? JSON.parse(stdinBuf) : {};
     if (payload && typeof payload.transcript_path === "string") {
-      lastMessage = extractLastAssistantText(payload.transcript_path);
+      transcriptPath = payload.transcript_path;
+      lastMessage = extractLastAssistantText(transcriptPath);
     }
   } catch {
     // stdin nie był JSON-em — ignoruj, aktualizuj samą fazę
@@ -45,6 +47,7 @@ function update() {
   state.phase = "waiting";
   state.phase_changed_at = now;
   state.terminal_id = Number(terminalId) || 0;
+  if (transcriptPath) state.transcript_path = transcriptPath;
   if (lastMessage) {
     state.last_message = lastMessage;
     state.last_message_at = now;

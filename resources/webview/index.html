@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -10,85 +10,77 @@
 <body data-active="1">
   <div id="frame" class="frame frame-t1">
 
-    <!-- TOP: 4 status tiles (20% height) -->
-    <section class="row row-top" aria-label="Status tiles">
-      <button class="tile tile-t1 is-active" data-id="1" type="button">
-        <span class="tile-label">T1</span>
-        <span class="tile-phase">idle</span>
-        <span class="tile-timer">0s</span>
-      </button>
-      <button class="tile tile-t2 is-disabled" data-id="2" type="button" disabled>
-        <span class="tile-label">T2</span>
-        <span class="tile-phase">–</span>
-        <span class="tile-timer"></span>
-      </button>
-      <button class="tile tile-t3 is-disabled" data-id="3" type="button" disabled>
-        <span class="tile-label">T3</span>
-        <span class="tile-phase">–</span>
-        <span class="tile-timer"></span>
-      </button>
-      <button class="tile tile-t4 is-disabled" data-id="4" type="button" disabled>
-        <span class="tile-label">T4</span>
-        <span class="tile-phase">–</span>
-        <span class="tile-timer"></span>
-      </button>
-    </section>
+    <!-- GÓRNY PASEK: input + wszystkie kontrolki w jednej linii -->
+    <div class="bar">
 
-    <!-- MIDDLE: buttons | messages (60% height) -->
-    <section class="row row-mid" aria-label="Controls">
-      <div class="pane pane-buttons">
-        <div class="pane-header">Actions</div>
-        <div class="button-grid" id="button-grid">
-          <div class="empty-hint">Brak przycisków (Phase 5)</div>
-        </div>
-      </div>
-      <div class="pane pane-messages">
-        <div class="pane-header">Messages</div>
-        <div class="messages-feed" id="messages-feed">
-          <div class="empty-hint">Brak wiadomości</div>
-        </div>
-      </div>
-    </section>
+      <!-- INPUT — 20-25% szerokości, pełna wysokość baru -->
+      <input id="input-text" class="input-line" type="text"
+        placeholder="Wpisz i naciśnij Enter…" autocomplete="off" spellcheck="false" />
 
-    <!-- BOTTOM: 4 info bars (20% height) -->
-    <section class="row row-bottom" aria-label="Metrics">
-      <div class="infobar infobar-t1" data-id="1">
-        <span class="bar-label">T1</span>
-        <div class="bar-metrics">
-          <span class="bar-metric" data-field="model">–</span>
-          <span class="bar-metric" data-field="ctx">Ctx –</span>
-          <span class="bar-metric" data-field="cost">$–</span>
-          <span class="bar-metric" data-field="mode">–</span>
-        </div>
+      <!-- DROPDOWN — treść zależy od wybranego trybu -->
+      <select id="sel-main" class="sel-main"></select>
+      <button id="btn-send" class="btn btn-primary" type="button">▶</button>
+
+      <div class="sep"></div>
+
+      <!-- TYP: cmd / user / text / input -->
+      <div class="chip-group" id="grp-mode" role="radiogroup" aria-label="Typ">
+        <button class="chip chip-mode is-active" data-mode="cmd"   type="button">cmd</button>
+        <button class="chip chip-mode"           data-mode="user"  type="button">user</button>
+        <button class="chip chip-mode"           data-mode="text"  type="button">text</button>
+        <button class="chip chip-mode"           data-mode="input" type="button">input</button>
       </div>
-      <div class="infobar infobar-t2 is-disabled" data-id="2">
-        <span class="bar-label">T2</span>
-        <div class="bar-metrics">
-          <span class="bar-metric" data-field="model">–</span>
-          <span class="bar-metric" data-field="ctx">Ctx –</span>
-          <span class="bar-metric" data-field="cost">$–</span>
-          <span class="bar-metric" data-field="mode">–</span>
-        </div>
+
+      <div class="sep"></div>
+
+      <!-- TERMINAL: 1 2 3 4 (kolorowe, bez podpisów) -->
+      <div class="chip-group" id="grp-term" role="radiogroup" aria-label="Terminal">
+        <button class="chip chip-t chip-t1 is-active" data-id="1" type="button">1</button>
+        <button class="chip chip-t chip-t2 is-disabled" data-id="2" type="button">2</button>
+        <button class="chip chip-t chip-t3 is-disabled" data-id="3" type="button">3</button>
+        <button class="chip chip-t chip-t4 is-disabled" data-id="4" type="button">4</button>
       </div>
-      <div class="infobar infobar-t3 is-disabled" data-id="3">
-        <span class="bar-label">T3</span>
-        <div class="bar-metrics">
-          <span class="bar-metric" data-field="model">–</span>
-          <span class="bar-metric" data-field="ctx">Ctx –</span>
-          <span class="bar-metric" data-field="cost">$–</span>
-          <span class="bar-metric" data-field="mode">–</span>
-        </div>
-      </div>
-      <div class="infobar infobar-t4 is-disabled" data-id="4">
-        <span class="bar-label">T4</span>
-        <div class="bar-metrics">
-          <span class="bar-metric" data-field="model">–</span>
-          <span class="bar-metric" data-field="ctx">Ctx –</span>
-          <span class="bar-metric" data-field="cost">$–</span>
-          <span class="bar-metric" data-field="mode">–</span>
-        </div>
-      </div>
-    </section>
+
+      <div class="sep"></div>
+
+      <!-- MODEL -->
+      <select id="sel-model" class="sel-sm" title="Model">
+        <option value="">default</option>
+        <option value="opus">opus</option>
+        <option value="sonnet">sonnet</option>
+        <option value="haiku">haiku</option>
+      </select>
+
+      <!-- EFFORT -->
+      <select id="sel-effort" class="sel-sm" title="Effort">
+        <option value="">effort</option>
+        <option value="low">low</option>
+        <option value="mid">mid</option>
+        <option value="hard">hard</option>
+        <option value="max">max</option>
+      </select>
+
+      <!-- THINK -->
+      <select id="sel-think" class="sel-sm" title="Think">
+        <option value="">think</option>
+        <option value="think">think</option>
+        <option value="think harder">think harder</option>
+      </select>
+
+      <!-- PLAN -->
+      <label class="chip" title="Plan mode (⇧Tab×2)">
+        <input type="checkbox" id="cb-plan" />plan
+      </label>
+
+      <div class="sep"></div>
+
+      <!-- KEYSTROKES -->
+      <button id="btn-esc"      class="btn btn-key" type="button">Esc</button>
+      <button id="btn-ctrlc"    class="btn btn-key" type="button">^C</button>
+      <button id="btn-shifttab" class="btn btn-key" type="button">⇧Tab</button>
+
+    </div>
+    <!-- koniec .bar -->
 
   </div>
 

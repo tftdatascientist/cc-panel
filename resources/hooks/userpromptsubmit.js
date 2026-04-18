@@ -14,9 +14,10 @@ if (!/^[1-4]$/.test(terminalId)) {
 const stateDir = path.join(os.homedir(), ".claude", "cc-panel");
 const statePath = path.join(stateDir, `state.${terminalId}.json`);
 
-// Konsumujemy stdin żeby CC nie blokował, payload nie jest potrzebny.
-process.stdin.resume();
-process.stdin.on("data", () => {});
+// Parsujemy stdin zeby wyciagnac transcript_path (do live tailowania messages feed).
+let stdin = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (c) => { stdin += c; });
 process.stdin.on("end", () => update("working"));
 process.stdin.on("error", () => update("working"));
 
@@ -26,6 +27,14 @@ function update(phase) {
     state = JSON.parse(fs.readFileSync(statePath, "utf8"));
   } catch {
     state = {};
+  }
+  try {
+    const payload = stdin ? JSON.parse(stdin) : {};
+    if (payload && typeof payload.transcript_path === "string") {
+      state.transcript_path = payload.transcript_path;
+    }
+  } catch {
+    // ignore — brak lub malformed payload
   }
   state.phase = phase;
   state.phase_changed_at = new Date().toISOString();

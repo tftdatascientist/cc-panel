@@ -1,0 +1,36 @@
+export interface SlashCommand {
+  label: string;
+  value: string;
+}
+
+export const SLASH_COMMANDS: ReadonlyArray<SlashCommand> = [
+  { label: "/clear", value: "/clear" },
+  { label: "/compact", value: "/compact" },
+  { label: "/status", value: "/status" },
+  { label: "/model", value: "/model" },
+  { label: "/cost", value: "/cost" },
+  { label: "/context", value: "/context" },
+  { label: "/memory", value: "/memory" },
+  { label: "/resume", value: "/resume" },
+  { label: "/help", value: "/help" },
+  { label: "/config", value: "/config" },
+  { label: "/hooks", value: "/hooks" },
+  { label: "/permissions", value: "/permissions" },
+  { label: "/mcp", value: "/mcp" },
+  { label: "/agents", value: "/agents" },
+  { label: "/review", value: "/review" },
+  { label: "/security-review", value: "/security-review" },
+  { label: "/doctor", value: "/doctor" },
+  { label: "/init", value: "/init" },
+  { label: "/bug", value: "/bug" },
+  { label: "/add-dir", value: "/add-dir" },
+  { label: "/ide", value: "/ide" },
+  { label: "/export", value: "/export" },
+  { label: "/output-style", value: "/output-style" },
+  { label: "/login", value: "/login" },
+  { label: "/logout", value: "/logout" },
+  { label: "/terminal-setup", value: "/terminal-setup" },
+  { label: "/upgrade", value: "/upgrade" },
+  { label: "/vim", value: "/vim" },
+  { label: "/release-notes", value: "/release-notes" },
+];

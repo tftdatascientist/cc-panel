@@ -2,9 +2,13 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "publisher": "local-dev",
   "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tftdatascientist/cc-panel.git"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -28,19 +32,83 @@
         "title": "CC Panel: Cycle Active Terminal"
       },
       {
-        "command": "ccPanel.editButton",
-        "title": "CC Panel: Edit Buttons"
+        "command": "ccPanel.editUserCommands",
+        "title": "CC Panel: Edit User Commands"
+      },
+      {
+        "command": "ccPanel.editMessages",
+        "title": "CC Panel: Edit Messages"
+      },
+      {
+        "command": "ccPanel.reloadUserLists",
+        "title": "CC Panel: Reload ustawienia.json"
       },
       {
         "command": "ccPanel.installHooks",
         "title": "CC Panel: Install Hooks"
+      },
+      {
+        "command": "ccPanel.selectTerminal1",
+        "title": "CC Panel: Select Terminal 1"
+      },
+      {
+        "command": "ccPanel.selectTerminal2",
+        "title": "CC Panel: Select Terminal 2"
+      },
+      {
+        "command": "ccPanel.selectTerminal3",
+        "title": "CC Panel: Select Terminal 3"
+      },
+      {
+        "command": "ccPanel.selectTerminal4",
+        "title": "CC Panel: Select Terminal 4"
       }
     ],
     "keybindings": [
       {
         "command": "ccPanel.cycleActive",
-        "key": "ctrl+alt+tab",
-        "mac": "cmd+alt+tab"
+        "key": "ctrl+alt+`",
+        "mac": "cmd+alt+`"
+      },
+      {
+        "command": "ccPanel.selectTerminal1",
+        "key": "ctrl+alt+1",
+        "mac": "cmd+alt+1"
+      },
+      {
+        "command": "ccPanel.selectTerminal2",
+        "key": "ctrl+alt+2",
+        "mac": "cmd+alt+2"
+      },
+      {
+        "command": "ccPanel.selectTerminal3",
+        "key": "ctrl+alt+3",
+        "mac": "cmd+alt+3"
+      },
+      {
+        "command": "ccPanel.selectTerminal4",
+        "key": "ctrl+alt+4",
+        "mac": "cmd+alt+4"
+      },
+      {
+        "command": "ccPanel.selectTerminal1",
+        "key": "f1",
+        "when": "activeWebviewPanelId == 'ccPanel'"
+      },
+      {
+        "command": "ccPanel.selectTerminal2",
+        "key": "f2",
+        "when": "activeWebviewPanelId == 'ccPanel'"
+      },
+      {
+        "command": "ccPanel.selectTerminal3",
+        "key": "f3",
+        "when": "activeWebviewPanelId == 'ccPanel'"
+      },
+      {
+        "command": "ccPanel.selectTerminal4",
+        "key": "f4",
+        "when": "activeWebviewPanelId == 'ccPanel'"
       }
     ],
     "colors": [
@@ -72,37 +140,6 @@
           "type": "string",
           "default": "claude",
           "description": "Komenda CLI spawnowana w każdym terminalu (np. 'claude', 'cc'). Musi być widoczna w PATH z poziomu cmd.exe (Windows) / sh (macOS/Linux)."
-        },
-        "ccPanel.buttons": {
-          "type": "array",
-          "default": [],
-          "description": "Przyciski panelu (nadpisuje resources/default-buttons.json). Każdy wpis: { label, type: 'sendText' | 'keystroke' | 'vsCodeCommand' | 'multiStep', value, icon?, section? }. Dla multiStep value jest tablicą obiektów { type, value }.",
-          "items": {
-            "type": "object",
-            "required": ["label", "type", "value"],
-            "properties": {
-              "label": { "type": "string" },
-              "type": { "type": "string", "enum": ["sendText", "keystroke", "vsCodeCommand", "multiStep"] },
-              "value": {
-                "oneOf": [
-                  { "type": "string" },
-                  {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "required": ["type", "value"],
-                      "properties": {
-                        "type": { "type": "string", "enum": ["sendText", "keystroke", "vsCodeCommand"] },
-                        "value": { "type": "string" }
-                      }
-                    }
-                  }
-                ]
-              },
-              "icon": { "type": "string" },
-              "section": { "type": "string", "description": "Opcjonalna sekcja — kolejne przyciski z tą samą wartością grupują się pod wspólnym nagłówkiem." }
-            }
-          }
         }
       }
     }

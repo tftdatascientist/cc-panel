@@ -1,5 +1,8 @@
 .vscode/**
 .vscode-test/**
+.claude/**
+*.vsix
+*.png
 src/**
 node_modules/**
 !node_modules/node-pty/**

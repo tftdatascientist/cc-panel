@@ -1,25 +1,26 @@
 #!/usr/bin/env node
 /*
- * cc-panel statusline hook.
- * CC wywołuje ten skrypt per aktualizacja status line. Skrypt:
- *   - czyta JSON ze stdin (payload CC),
- *   - zapisuje znormalizowany stan do ~/.claude/cc-panel/state.{CC_PANEL_TERMINAL_ID}.json,
- *   - na stdout wypluwa krótki tekst renderowany przez CC w terminalu.
+ * cc-panel statusline hook (chain-capable).
+ * - czyta JSON ze stdin (payload CC),
+ * - zapisuje znormalizowany stan do ~/.claude/cc-panel/state.{CC_PANEL_TERMINAL_ID}.json,
+ * - jesli ~/.claude/cc-panel/chain.json zawiera { statusLineCommand } -> spawnSync ten command
+ *   z tym samym stdin i forwarduje jego stdout (chain: zachowujemy np. ccstatusline usera),
+ * - w przeciwnym razie wypluwa prosty format "T{id} {model}${cost} ctx:NN%".
  */
 "use strict";
 
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+const { spawnSync } = require("child_process");
 
 const terminalId = String(process.env.CC_PANEL_TERMINAL_ID || "");
 if (!/^[1-4]$/.test(terminalId)) {
-  // sesja nie jest spawnowana przez cc-panel — cichy no-op (bez stdout, żeby nie łamać
-  // custom statusLine users i tak mają od Anthropic lub ccstatusline).
   process.exit(0);
 }
 const stateDir = path.join(os.homedir(), ".claude", "cc-panel");
 const statePath = path.join(stateDir, `state.${terminalId}.json`);
+const chainPath = path.join(stateDir, "chain.json");
 
 let stdin = "";
 process.stdin.setEncoding("utf8");
@@ -45,7 +46,6 @@ process.stdin.on("end", () => {
   const mode = input.output_style || input.mode || "default";
   const tokenUsage = input.token_usage || input.usage || {};
 
-  // Wszystkie Claude 4.x mają okno 200k — ctx_pct = suma wejściowych tokenów / 200k.
   const CONTEXT_WINDOW = 200_000;
   const inputTotal =
     (Number(tokenUsage.input_tokens) || 0) +
@@ -68,11 +68,58 @@ process.stdin.on("end", () => {
     raw: input,
   };
 
+  // Merge: zachowaj phase/last_message z poprzedniego state (pisane przez userpromptsubmit/stop)
+  try {
+    if (fs.existsSync(statePath)) {
+      const prev = JSON.parse(fs.readFileSync(statePath, "utf8"));
+      if (prev && typeof prev === "object") {
+        if (prev.phase) state.phase = prev.phase;
+        if (prev.phase_changed_at) state.phase_changed_at = prev.phase_changed_at;
+        if (prev.last_message) state.last_message = prev.last_message;
+        if (prev.last_message_at) state.last_message_at = prev.last_message_at;
+      }
+    }
+  } catch {
+    // corrupted prev — pomijamy
+  }
+
   try {
     fs.mkdirSync(stateDir, { recursive: true });
     fs.writeFileSync(statePath, JSON.stringify(state, null, 2));
   } catch (err) {
     process.stderr.write(`cc-panel statusline: ${err && err.message}\n`);
+  }
+
+  // Chain: jesli uzytkownik ma wlasny statusLine (np. ccstatusline), forwardujemy tam stdin
+  // i przekazujemy jego stdout jako nasz output.
+  let chainCommand = null;
+  try {
+    if (fs.existsSync(chainPath)) {
+      const chain = JSON.parse(fs.readFileSync(chainPath, "utf8"));
+      if (chain && typeof chain.statusLineCommand === "string" && chain.statusLineCommand.trim()) {
+        chainCommand = chain.statusLineCommand.trim();
+      }
+    }
+  } catch {
+    // brak/malformed chain.json — fallback do domyslnego outputu
+  }
+
+  if (chainCommand) {
+    try {
+      const res = spawnSync(chainCommand, {
+        shell: true,
+        input: stdin,
+        encoding: "utf8",
+        timeout: 10_000,
+        windowsHide: true,
+      });
+      if (res.stdout) process.stdout.write(res.stdout);
+      if (res.stderr) process.stderr.write(res.stderr);
+      return;
+    } catch (err) {
+      process.stderr.write(`cc-panel chain statusLine error: ${err && err.message}\n`);
+      // fallthrough do domyslnego outputu
+    }
   }
 
   const costStr = typeof costUsd === "number" ? ` $${costUsd.toFixed(2)}` : "";

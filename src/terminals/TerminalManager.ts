@@ -13,6 +13,8 @@ export class TerminalManager implements vscode.Disposable {
   private readonly terminals = new Map<number, ManagedTerminal>();
   private readonly changedEmitter = new vscode.EventEmitter<number[]>();
   readonly onTerminalsChanged = this.changedEmitter.event;
+  private readonly dataEmitter = new vscode.EventEmitter<{ id: number; data: string }>();
+  readonly onTerminalData = this.dataEmitter.event;
 
   activeIds(): number[] {
     return [...this.terminals.keys()].sort((a, b) => a - b);
@@ -32,53 +34,98 @@ export class TerminalManager implements vscode.Disposable {
     const closeEmitter = new vscode.EventEmitter<number | void>();
 
     let ptyProcess: pty.IPty | undefined;
+    let spawnDone = false;
+    let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
+
+    const spawnPty = (cols: number, rows: number): void => {
+      if (spawnDone) {
+        // Już spawnowany — tylko resize
+        if (ptyProcess) {
+          try { ptyProcess.resize(Math.max(10, cols), Math.max(1, rows)); } catch { /* ignoruj */ }
+        }
+        return;
+      }
+      spawnDone = true;
+      if (fallbackTimer !== undefined) {
+        clearTimeout(fallbackTimer);
+        fallbackTimer = undefined;
+      }
+
+      const safeCols = Math.max(10, cols);
+      const safeRows = Math.max(1, rows);
+      const cwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
+
+      const env: Record<string, string> = {};
+      for (const [k, v] of Object.entries(process.env)) {
+        if (typeof v === "string") env[k] = v;
+      }
+      env.CC_PANEL_TERMINAL_ID = String(id);
+      env.COLUMNS = String(safeCols);
+      env.LINES = String(safeRows);
+
+      const command =
+        vscode.workspace.getConfiguration("ccPanel").get<string>("command")?.trim() || "claude";
+      const { shellFile, shellArgs } = resolveShell(command);
+
+      try {
+        ptyProcess = pty.spawn(shellFile, shellArgs, {
+          name: "xterm-256color",
+          cols: safeCols,
+          rows: safeRows,
+          cwd,
+          env,
+        });
+      } catch (err) {
+        // Pokaż błąd w terminalu
+        writeEmitter.fire(`\r\n\x1b[31mCC Panel: nie udało się uruchomić "${command}"\r\n${err}\x1b[0m\r\n`);
+        closeEmitter.fire(1);
+        return;
+      }
+
+      ptyProcess.onData((data) => {
+        writeEmitter.fire(data);
+        this.dataEmitter.fire({ id, data });
+      });
+      ptyProcess.onExit(({ exitCode }) => {
+        closeEmitter.fire(exitCode);
+        ptyProcess = undefined;
+        spawnDone = false; // pozwól na re-spawn gdyby terminal był ponownie otwarty
+      });
+    };
 
     const pseudoterminal: vscode.Pseudoterminal = {
       onDidWrite: writeEmitter.event,
       onDidClose: closeEmitter.event,
+
       open: (initialDimensions) => {
-        const cols = initialDimensions?.columns ?? 80;
-        const rows = initialDimensions?.rows ?? 30;
-        const cwd =
-          vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
-        const env: Record<string, string> = {};
-        for (const [k, v] of Object.entries(process.env)) {
-          if (typeof v === "string") env[k] = v;
+        if (initialDimensions && initialDimensions.columns > 0 && initialDimensions.rows > 0) {
+          // VS Code dał wymiary od razu — spawn natychmiast
+          spawnPty(initialDimensions.columns, initialDimensions.rows);
+        } else {
+          // Poczekaj na setDimensions, ale nie wiecznie — fallback po 300ms
+          fallbackTimer = setTimeout(() => {
+            fallbackTimer = undefined;
+            if (!spawnDone) spawnPty(220, 50);
+          }, 300);
         }
-        env.CC_PANEL_TERMINAL_ID = String(id);
-
-        const command =
-          vscode.workspace
-            .getConfiguration("ccPanel")
-            .get<string>("command")
-            ?.trim() || "claude";
-        const { shellFile, shellArgs } = resolveShell(command);
-        ptyProcess = pty.spawn(shellFile, shellArgs, {
-          name: "xterm-256color",
-          cols,
-          rows,
-          cwd,
-          env,
-        });
-
-        ptyProcess.onData((data) => writeEmitter.fire(data));
-        ptyProcess.onExit(({ exitCode }) => {
-          closeEmitter.fire(exitCode);
-          ptyProcess = undefined;
-        });
       },
+
       close: () => {
+        if (fallbackTimer !== undefined) {
+          clearTimeout(fallbackTimer);
+          fallbackTimer = undefined;
+        }
         ptyProcess?.kill();
         ptyProcess = undefined;
+        spawnDone = false;
       },
-      handleInput: (data) => ptyProcess?.write(data),
+
+      handleInput: (data) => {
+        ptyProcess?.write(data);
+      },
+
       setDimensions: (dim) => {
-        if (!ptyProcess) return;
-        try {
-          ptyProcess.resize(Math.max(1, dim.columns), Math.max(1, dim.rows));
-        } catch {
-          // pty może już nie żyć — ignoruj
-        }
+        spawnPty(dim.columns, dim.rows);
       },
     };
 
@@ -122,10 +169,10 @@ export class TerminalManager implements vscode.Disposable {
   }
 
   write(id: number, data: string): boolean {
-    const ptyProcess = this.terminals.get(id)?.getPty();
-    if (!ptyProcess) return false;
+    const p = this.terminals.get(id)?.getPty();
+    if (!p) return false;
     try {
-      ptyProcess.write(data);
+      p.write(data);
       return true;
     } catch {
       return false;
@@ -140,13 +187,16 @@ export class TerminalManager implements vscode.Disposable {
     }
     this.terminals.clear();
     this.changedEmitter.dispose();
+    this.dataEmitter.dispose();
   }
 }
 
 function resolveShell(command: string): { shellFile: string; shellArgs: string[] } {
   if (process.platform === "win32") {
+    // /k zamiast /c — cmd pozostaje otwarty po zakończeniu CC,
+    // co pozwala na ponowne uruchomienie bez zamykania terminala
     const comspec = process.env.ComSpec ?? "cmd.exe";
-    return { shellFile: comspec, shellArgs: ["/c", command] };
+    return { shellFile: comspec, shellArgs: ["/k", command] };
   }
-  return { shellFile: command, shellArgs: [] };
+  return { shellFile: "/bin/sh", shellArgs: ["-c", command] };
 }

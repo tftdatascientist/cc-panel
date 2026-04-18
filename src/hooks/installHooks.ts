@@ -66,21 +66,50 @@ export async function installHooks(extensionUri: vscode.Uri): Promise<void> {
   const statusChanged = existing?.command !== statusCmd;
   let statusLineInstalled = false;
   let statusLineKept = false;
+  let statusLineChained = false;
+  const chainPath = path.join(os.homedir(), ".claude", "cc-panel", "chain.json");
   if (existing && statusChanged) {
     const choice = await vscode.window.showWarningMessage(
-      `W ~/.claude/settings.json istnieje statusLine:\n\n${existing.command}\n\nCC Panel może podmienić go własnym hookiem (metryki model/ctx/cost w kafelkach) lub zachować Twój (metryki pozostaną puste; fazy working/waiting dalej działają).`,
+      `W ~/.claude/settings.json istnieje statusLine:\n\n${existing.command}\n\nCo zrobić z Twoim statusLine?\n• Zachowaj mój — zostawi Twój nietknięty (metryki model/ctx/cost w cc-panel pozostaną puste).\n• Chain — zachowa Twój widok w terminalu + zaloguje metryki do kafelków cc-panel.\n• Podmień — zastąpi Twój statusLine własnym cc-panel.`,
       { modal: true },
-      "Podmień (backup)",
-      "Zachowaj mój"
+      "Zachowaj mój",
+      "Chain (zachowaj + loguj metryki)",
+      "Podmień (backup)"
     );
-    if (choice === "Podmień (backup)") {
+    if (choice === "Zachowaj mój") {
+      statusLineKept = true;
+    } else if (choice === "Chain (zachowaj + loguj metryki)") {
+      const backupPath = `${settingsPath}.bak-cc-panel-${Date.now()}`;
+      fs.copyFileSync(settingsPath, backupPath);
+      try {
+        fs.mkdirSync(path.dirname(chainPath), { recursive: true });
+        fs.writeFileSync(
+          chainPath,
+          JSON.stringify({ statusLineCommand: existing.command }, null, 2) + "\n"
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `CC Panel: nie udało się zapisać ${chainPath} — ${(err as Error).message}`
+        );
+        return;
+      }
+      settings.statusLine = { type: "command", command: statusCmd };
+      statusLineChained = true;
+      vscode.window.showInformationMessage(
+        `CC Panel: chain aktywny — oryginalny statusLine zapamiętany w ${chainPath}. Backup settings.json → ${backupPath}`
+      );
+    } else if (choice === "Podmień (backup)") {
       const backupPath = `${settingsPath}.bak-cc-panel-${Date.now()}`;
       fs.copyFileSync(settingsPath, backupPath);
       vscode.window.showInformationMessage(`CC Panel: backup → ${backupPath}`);
       settings.statusLine = { type: "command", command: statusCmd };
       statusLineInstalled = true;
-    } else if (choice === "Zachowaj mój") {
-      statusLineKept = true;
+      // Czyscimy chain.json jesli istnial — zeby nie forwardowac do starego commanda.
+      try {
+        if (fs.existsSync(chainPath)) fs.unlinkSync(chainPath);
+      } catch {
+        // ignore
+      }
     } else {
       return;
     }
@@ -103,7 +132,9 @@ export async function installHooks(extensionUri: vscode.Uri): Promise<void> {
     return;
   }
 
-  const statusNote = statusLineKept
+  const statusNote = statusLineChained
+    ? " (statusLine: chain — Twój + logowanie metryk)"
+    : statusLineKept
     ? " (statusLine: zachowany Twój — metryki model/ctx/cost w kafelkach pozostaną puste)"
     : statusLineInstalled
     ? " (statusLine: CC Panel)"

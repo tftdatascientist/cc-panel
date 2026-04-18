@@ -2,13 +2,13 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as crypto from "crypto";
 import {
-  ButtonViewSpec,
-  MessageItem,
+  DropItem,
+  KeystrokeName,
+  MessageDropItem,
   PanelInboundMessage,
   PanelOutboundMessage,
+  SendInputOptions,
   TerminalId,
-  TerminalMetrics,
-  TerminalPhase,
   isTerminalId,
 } from "./messages";
 
@@ -16,23 +16,48 @@ export interface PanelCallbacks {
   onReady?: () => void;
   onSelectTerminal?: (id: TerminalId) => void;
   onAddTerminal?: (id: TerminalId) => void;
-  onInvokeButton?: (index: number) => void;
+  onSendSlash?: (index: number, extra?: string) => void;
+  onSendUserCommand?: (index: number, extra?: string) => void;
+  onSendMessage?: (index: number) => void;
+  onSendInput?: (options: SendInputOptions) => void;
+  onSendKeystroke?: (name: KeystrokeName) => void;
+  onSendChar?: (data: string) => void;
 }
-
-const MESSAGE_BUFFER_LIMIT = 100;
 
 export class PanelManager implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private readonly subscriptions: vscode.Disposable[] = [];
   private activeId: TerminalId = 1;
   private terminals: TerminalId[] = [1];
-  private buttons: ButtonViewSpec[] = [];
-  private messages: MessageItem[] = [];
+  private slashCommands: DropItem[] = [];
+  private userCommands: DropItem[] = [];
+  private messages: MessageDropItem[] = [];
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly callbacks: PanelCallbacks = {}
   ) {}
+
+  setSlashCommands(items: DropItem[]): void {
+    this.slashCommands = items;
+    this.post({ type: "setSlashCommands", slashCommands: items });
+  }
+
+  setUserLists(userCommands: DropItem[], messages: MessageDropItem[]): void {
+    this.userCommands = userCommands;
+    this.messages = messages;
+    this.post({ type: "setUserLists", userCommands, messages });
+  }
+
+  setTerminals(ids: TerminalId[]): void {
+    this.terminals = [...ids].sort((a, b) => a - b);
+    this.post({ type: "setTerminals", terminals: this.terminals });
+  }
+
+  setActive(id: TerminalId): void {
+    this.activeId = id;
+    this.post({ type: "setActive", id });
+  }
 
   openOrReveal(): vscode.WebviewPanel {
     if (this.panel) {
@@ -73,9 +98,50 @@ export class PanelManager implements vscode.Disposable {
         if (isTerminalId(id)) this.callbacks.onAddTerminal?.(id);
         return;
       }
-      if (msg.type === "invokeButton") {
+      if (msg.type === "sendSlash") {
+        const m = msg as { index?: unknown; extra?: unknown };
+        if (typeof m.index === "number") {
+          this.callbacks.onSendSlash?.(m.index, typeof m.extra === "string" ? m.extra : undefined);
+        }
+        return;
+      }
+      if (msg.type === "sendUserCommand") {
+        const m = msg as { index?: unknown; extra?: unknown };
+        if (typeof m.index === "number") {
+          this.callbacks.onSendUserCommand?.(m.index, typeof m.extra === "string" ? m.extra : undefined);
+        }
+        return;
+      }
+      if (msg.type === "sendMessage") {
         const index = (msg as { index?: unknown }).index;
-        if (typeof index === "number") this.callbacks.onInvokeButton?.(index);
+        if (typeof index === "number") this.callbacks.onSendMessage?.(index);
+        return;
+      }
+      if (msg.type === "sendInput") {
+        const options = (msg as { options?: unknown }).options as SendInputOptions | undefined;
+        if (options && typeof options.text === "string") {
+          this.callbacks.onSendInput?.({
+            text:   options.text,
+            model:  options.model  || "",
+            effort: options.effort || "",
+            think:  options.think  || "",
+            plan:   !!options.plan,
+          });
+        }
+        return;
+      }
+      if (msg.type === "sendKeystroke") {
+        const name = (msg as { name?: unknown }).name;
+        if (name === "esc" || name === "ctrlC" || name === "shiftTab") {
+          this.callbacks.onSendKeystroke?.(name);
+        }
+        return;
+      }
+      if (msg.type === "sendChar") {
+        const data = (msg as { data?: unknown }).data;
+        if (typeof data === "string" && data.length > 0) {
+          this.callbacks.onSendChar?.(data);
+        }
         return;
       }
     });
@@ -88,37 +154,6 @@ export class PanelManager implements vscode.Disposable {
     this.subscriptions.push(msgSub, disposeSub);
     this.panel = panel;
     return panel;
-  }
-
-  setTerminals(ids: TerminalId[]): void {
-    this.terminals = [...ids].sort((a, b) => a - b);
-    this.post({ type: "setTerminals", terminals: this.terminals });
-  }
-
-  setActive(id: TerminalId): void {
-    this.activeId = id;
-    this.post({ type: "setActive", id });
-  }
-
-  setMetrics(id: TerminalId, metrics: TerminalMetrics): void {
-    this.post({ type: "setMetrics", id, ...metrics });
-  }
-
-  setPhase(id: TerminalId, phase: TerminalPhase, sinceMs?: number): void {
-    this.post({ type: "setPhase", id, phase, sinceMs });
-  }
-
-  setButtons(buttons: ButtonViewSpec[]): void {
-    this.buttons = buttons;
-    this.post({ type: "setButtons", buttons });
-  }
-
-  addMessage(message: MessageItem): void {
-    this.messages.push(message);
-    if (this.messages.length > MESSAGE_BUFFER_LIMIT) {
-      this.messages.splice(0, this.messages.length - MESSAGE_BUFFER_LIMIT);
-    }
-    this.post({ type: "addMessage", message });
   }
 
   reveal(): void {
@@ -136,11 +171,10 @@ export class PanelManager implements vscode.Disposable {
       type: "init",
       terminals: this.terminals,
       activeId: this.activeId,
+      slashCommands: this.slashCommands,
+      userCommands: this.userCommands,
+      messages: this.messages,
     });
-    this.post({ type: "setButtons", buttons: this.buttons });
-    if (this.messages.length > 0) {
-      this.post({ type: "setMessages", messages: this.messages });
-    }
   }
 
   private post(msg: PanelOutboundMessage): void {
