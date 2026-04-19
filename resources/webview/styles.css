@@ -17,16 +17,15 @@
 html, body {
   height: 100%;
   font-family: var(--vscode-font-family);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--fg);
   background: var(--bg);
   overflow: hidden;
 }
 
-/* Cały panel = jeden pasek, max 100px wysokości */
+/* Frame = pasek kontrolny + opcjonalny dashboard pod spodem. */
 .frame {
-  height: 100vh;
-  max-height: 100px;
+  min-height: 40px;
   display: flex;
   flex-direction: column;
   border: 2px solid var(--accent);
@@ -37,22 +36,24 @@ html, body {
 .frame.frame-t3 { --accent: var(--color-t3); border-color: var(--color-t3); }
 .frame.frame-t4 { --accent: var(--color-t4); border-color: var(--color-t4); }
 
-/* BAR: jedna linia ze wszystkimi kontrolkami */
+/* BAR: dwa wiersze kontrolek (top + terms) */
 .bar {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   display: flex;
   align-items: stretch;
   gap: 4px;
-  padding: 4px 6px;
+  padding: 3px 5px;
   min-height: 0;
   overflow: hidden;
 }
+.bar-top   { height: 40px; }
+.bar-terms { height: 34px; padding-top: 0; }
 
-/* INPUT — 22% szerokości, pełna wysokość */
+/* INPUT */
 .input-line {
-  flex: 0 0 22%;
+  flex: 1 1 auto;
   min-width: 0;
-  padding: 0 8px;
+  padding: 0 6px;
   font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
   font-size: 12px;
   color: var(--fg);
@@ -64,23 +65,6 @@ html, body {
 }
 .input-line:focus { border-color: var(--accent); }
 
-/* GŁÓWNY DROPDOWN */
-.sel-main {
-  flex: 1 1 0;
-  min-width: 0;
-  padding: 0 4px;
-  font-family: inherit;
-  font-size: 11px;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  outline: none;
-  height: 100%;
-}
-.sel-main:focus { border-color: var(--accent); }
-.sel-main.hidden { display: none; }
-
 /* SEPARATORY */
 .sep {
   flex: 0 0 1px;
@@ -89,20 +73,20 @@ html, body {
   margin: 2px 0;
 }
 
-/* CHIP GROUP — przyciski typu i terminali */
+/* CHIP GROUP */
 .chip-group {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   flex: 0 0 auto;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  height: 100%;
+  justify-content: center;
+  gap: 2px;
+  padding: 0 6px;
   background: var(--pane-bg);
   color: var(--muted);
   border: 1px solid var(--border);
@@ -118,46 +102,91 @@ html, body {
 .chip:hover { color: var(--fg); border-color: color-mix(in srgb, var(--fg) 30%, transparent); }
 .chip.is-active {
   color: var(--fg);
-  background: color-mix(in srgb, var(--accent) 20%, var(--bg));
+  background: color-mix(in srgb, var(--accent) 22%, var(--bg));
   border-color: var(--accent);
 }
-.chip input[type="checkbox"] { display: none; }
 
-/* TERMINAL chips — kolorowane border-bottom */
-.chip-t { font-variant-numeric: tabular-nums; }
+/* TERMINAL chips */
+.chip-t { font-variant-numeric: tabular-nums; font-size: 13px; position: relative; }
 .chip-t1 { --t-color: var(--color-t1); }
 .chip-t2 { --t-color: var(--color-t2); }
 .chip-t3 { --t-color: var(--color-t3); }
 .chip-t4 { --t-color: var(--color-t4); }
-.chip-t { border-bottom: 2px solid var(--t-color); }
+.chip-t { border-bottom: 3px solid var(--t-color); }
 .chip-t.is-active {
-  background: color-mix(in srgb, var(--t-color) 20%, var(--bg));
+  background: color-mix(in srgb, var(--t-color) 25%, var(--bg));
   border-color: var(--t-color);
   color: var(--fg);
 }
 .chip-t.is-disabled { opacity: 0.35; }
 
-/* MAŁE SELEKTY (model / effort / think) */
-.sel-sm {
-  flex: 0 0 auto;
-  padding: 0 4px;
-  height: 100%;
-  font-family: inherit;
-  font-size: 11px;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  outline: none;
-  min-width: 52px;
-  max-width: 90px;
+/* CHIP TERMINAL-WIDE */
+.chip-group-terms {
+  flex: 1 1 auto;
+  gap: 6px;
 }
-.sel-sm:focus { border-color: var(--accent); }
+.chip-term-wide {
+  flex: 1 1 0;
+  height: 100%;
+  padding: 0 10px;
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+.chip-term-id {
+  font-weight: 700;
+  color: var(--t-color);
+  letter-spacing: 0.03em;
+}
+.chip-term-wide.is-active .chip-term-id { color: var(--fg); }
+.chip-term-ctx {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--t-color);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.chip-term-wide.is-active .chip-term-ctx {
+  color: var(--fg);
+}
+
+/* ── Wskaźnik pracy (phase=working) ───────────────────────────────────────
+   Pulsujący dot w lewym górnym rogu chipa. Kolor terminala, 6px, znika gdy
+   waiting. Nie blokuje żadnego tekstu, rzuca się w oczy bez nadmiernej animacji. */
+@keyframes cc-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.4; transform: scale(0.75); }
+}
+.chip-t[data-working="true"]::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 6px;
+  height: 6px;
+  background: var(--t-color);
+  border-radius: 50%;
+  animation: cc-pulse 1.4s ease-in-out infinite;
+}
+
+/* Badge "nowa wiadomość" — prawy górny róg */
+.chip-t[data-unread="true"]::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  background: var(--t-color);
+  border-radius: 50%;
+}
 
 /* PRZYCISKI */
 .btn {
   flex: 0 0 auto;
-  padding: 0 10px;
+  padding: 0 8px;
   height: 100%;
   background: color-mix(in srgb, var(--fg) 8%, var(--bg));
   color: var(--fg);
@@ -176,6 +205,7 @@ html, body {
   background: color-mix(in srgb, var(--accent) 35%, var(--bg));
   border-color: var(--accent);
   font-weight: 700;
+  min-width: 32px;
 }
 .btn-primary:hover { background: color-mix(in srgb, var(--accent) 50%, var(--bg)); }
 
@@ -183,4 +213,80 @@ html, body {
   font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
   font-size: 10px;
   padding: 0 7px;
+}
+
+/* ═══ DASHBOARD ═══════════════════════════════════════════════════════════ */
+.dashboard {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 6px 5px 10px;
+  border-top: 1px solid var(--border);
+  min-height: 0;
+  overflow: hidden;
+}
+.frame.dash-collapsed .dashboard { display: none; }
+
+.dash-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 6px 0;
+  font-size: 12px;
+  table-layout: fixed;
+  flex: 0 0 auto;
+  margin: 0 -6px;
+}
+.dash-table td {
+  padding: 4px 8px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.dash-table tr:last-child td { border-bottom: none; }
+.dash-cell { width: 25%; }
+.dash-cell[data-id="1"] { color: var(--color-t1); }
+.dash-cell[data-id="2"] { color: var(--color-t2); }
+.dash-cell[data-id="3"] { color: var(--color-t3); }
+.dash-cell[data-id="4"] { color: var(--color-t4); }
+
+.dash-cell[data-active="true"] {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--fg);
+  font-weight: 600;
+}
+.dash-cell[data-stale="true"] {
+  color: color-mix(in srgb, var(--fg) 35%, transparent);
+}
+
+/* Last message */
+.last-message-wrap {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+.last-message-hdr {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+}
+.last-message-title { color: var(--muted); font-weight: 600; }
+.last-message-meta { color: var(--muted); font-size: 10px; }
+.last-message-body {
+  flex: 1 1 auto;
+  padding: 8px 10px;
+  background: var(--pane-bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow: auto;
+  min-height: 50px;
+  max-height: 180px;
+  color: var(--fg);
 }

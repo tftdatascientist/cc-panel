@@ -2,8 +2,8 @@ import * as vscode from "vscode";
 import { TerminalManager } from "./terminals/TerminalManager";
 import { PanelManager } from "./panel/PanelManager";
 import {
+  DashboardMapDTO,
   KeystrokeName,
-  SendInputOptions,
   TerminalId,
   isTerminalId,
 } from "./panel/messages";
@@ -15,6 +15,7 @@ import {
   runEditMessages,
   runEditUserCommands,
 } from "./settings/editUserLists";
+import { StateWatcher, TerminalDashboardSnapshot } from "./state/StateWatcher";
 
 const TERMINAL_IDS: TerminalId[] = [1, 2, 3, 4];
 
@@ -27,6 +28,7 @@ const KEYSTROKES: Record<KeystrokeName, string> = {
 const terminalManager = new TerminalManager();
 let panelManager: PanelManager | undefined;
 let userListsStore: UserListsStore | undefined;
+let stateWatcher: StateWatcher | undefined;
 let activeTerminalId: TerminalId = 1;
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -36,6 +38,9 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(userListsStore);
 
   panelManager = new PanelManager(context.extensionUri, {
+    onReady: () => {
+      pushUserLists();
+    },
     onSelectTerminal: (id) => {
       if (!terminalManager.get(id)) return;
       activeTerminalId = id;
@@ -45,40 +50,26 @@ export function activate(context: vscode.ExtensionContext): void {
     onAddTerminal: (id) => {
       void addTerminal(id);
     },
-    onSendSlash: (index, extra) => {
-      const item = SLASH_COMMANDS[index];
-      if (!item) return;
-      const cmd = extra ? `${item.value} ${extra}` : item.value;
-      writeAndWarn(`${cmd}\r`, item.label);
-    },
-    onSendUserCommand: (index, extra) => {
-      const item = userListsStore?.current().userCommands[index];
-      if (!item) return;
-      const cmd = extra ? `${item.value} ${extra}` : item.value;
-      writeAndWarn(`${cmd}\r`, item.label);
-    },
-    onSendMessage: (index) => {
-      const item = userListsStore?.current().messages[index];
-      if (!item) return;
-      writeAndWarn(`${item.text}\r`, item.label);
-    },
-    onSendInput: (opts) => {
-      void sendInputWithModifiers(opts);
-    },
     onSendKeystroke: (name) => {
       const bytes = KEYSTROKES[name];
       if (!bytes) return;
       writeAndWarn(bytes, name);
     },
-    onSendChar: (data) => {
-      terminalManager.write(activeTerminalId, data);
+    onSendRaw: (text) => {
+      writeAndWarn(text, text.slice(0, 40));
     },
   });
+
   context.subscriptions.push(panelManager);
 
-  panelManager.setSlashCommands(SLASH_COMMANDS.map((s) => ({ ...s })));
-  pushUserLists();
+  stateWatcher = new StateWatcher();
+  context.subscriptions.push(stateWatcher);
+  stateWatcher.onChange((map) => {
+    panelManager?.setDashboard(toDashboardDTO(map));
+  });
+  stateWatcher.start();
 
+  panelManager.setSlashCommands(SLASH_COMMANDS.map((s) => ({ ...s })));
   userListsStore.onChange(() => pushUserLists());
 
   terminalManager.onTerminalsChanged((ids) => {
@@ -93,15 +84,16 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("ccPanel.open", async () => {
-      const firstOpen = !terminalManager.get(1);
-      panelManager!.openOrReveal();
-      if (firstOpen) {
-        await vscode.commands.executeCommand("workbench.action.newGroupBelow");
+      try {
+        await panelManager!.openOrReveal();
+        await ensureTerminal(1);
+        activeTerminalId = 1;
+        panelManager!.setActive(1);
+      } catch (err) {
+        const msg = err instanceof Error ? err.stack ?? err.message : String(err);
+        console.error("[cc-panel] ccPanel.open ERROR:", msg);
+        void vscode.window.showErrorMessage(`CC Panel open failed: ${msg.split("\n")[0]}`);
       }
-      await ensureTerminal(1);
-      activeTerminalId = 1;
-      panelManager!.setActive(1);
-      panelManager!.reveal();
     })
   );
 
@@ -155,18 +147,81 @@ export function activate(context: vscode.ExtensionContext): void {
       await installHooks(context.extensionUri);
     })
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ccPanel.setProjectFolder", async () => {
+      if (!userListsStore) return;
+      const TERMINAL_LABELS: Record<number, string> = {
+        1: "$(circle-filled) T1 — teal",
+        2: "$(circle-filled) T2 — amber",
+        3: "$(circle-filled) T3 — purple",
+        4: "$(circle-filled) T4 — coral",
+      };
+      const paths = userListsStore.current().projectPaths;
+      const pick = await vscode.window.showQuickPick(
+        ([1, 2, 3, 4] as const).map((id) => ({
+          label: TERMINAL_LABELS[id],
+          description: paths[id - 1] || "(nieustawiony)",
+          id,
+        })),
+        { title: "CC Panel: dla którego terminala ustawić folder projektu?" }
+      );
+      if (!pick) return;
+
+      const defaultUri = paths[pick.id - 1]
+        ? vscode.Uri.file(paths[pick.id - 1])
+        : vscode.workspace.workspaceFolders?.[0]?.uri;
+      const uris = await vscode.window.showOpenDialog({
+        title: `CC Panel: folder projektu dla T${pick.id}`,
+        canSelectFiles: false,
+        canSelectFolders: true,
+        canSelectMany: false,
+        defaultUri,
+      });
+      if (!uris || uris.length === 0) return;
+      const chosen = uris[0].fsPath;
+      await userListsStore.saveProjectPath(pick.id, chosen);
+      void vscode.window.showInformationMessage(
+        `CC Panel: T${pick.id} → ${chosen}`
+      );
+    })
+  );
 }
 
 export function deactivate(): void {
+  stateWatcher?.dispose();
+  stateWatcher = undefined;
   panelManager?.dispose();
   panelManager = undefined;
   terminalManager.dispose();
+}
+
+function toDashboardDTO(
+  map: Partial<Record<TerminalId, TerminalDashboardSnapshot>>
+): DashboardMapDTO {
+  const out: DashboardMapDTO = {};
+  for (const id of [1, 2, 3, 4] as TerminalId[]) {
+    const snap = map[id];
+    if (!snap) continue;
+    out[id] = {
+      id: snap.id,
+      model: snap.model,
+      ctxPct: snap.ctxPct,
+      totalTokens: snap.totalTokens,
+      costUsd: snap.costUsd,
+      lastMessage: snap.lastMessage,
+      lastMessageAt: snap.lastMessageAt,
+      phase: snap.phase,
+    };
+  }
+  return out;
 }
 
 function pushUserLists(): void {
   if (!panelManager || !userListsStore) return;
   const lists = userListsStore.current();
   panelManager.setUserLists(
+    lists.slashDropdown.map((c) => ({ ...c })),
     lists.userCommands.map((c) => ({ ...c })),
     lists.messages.map((m) => ({ ...m }))
   );
@@ -182,47 +237,13 @@ function writeAndWarn(data: string, label: string): boolean {
   return ok;
 }
 
-async function sendInputWithModifiers(opts: SendInputOptions): Promise<void> {
-  const trimmed = opts.text;
-  if (!trimmed || trimmed.trim().length === 0) return;
-
-  if (opts.plan) {
-    if (!writeAndWarn(KEYSTROKES.shiftTab + KEYSTROKES.shiftTab, "plan mode (⇧Tab×2)")) return;
-    await sleep(60);
-  }
-
-  if (opts.model) {
-    if (!writeAndWarn(`/model ${opts.model}\r`, `/model ${opts.model}`)) return;
-    await sleep(120);
-  }
-
-  if (opts.effort) {
-    if (!writeAndWarn(`/effort ${opts.effort}\r`, `/effort ${opts.effort}`)) return;
-    await sleep(120);
-  }
-
-  // think: "" | "think" | "think harder" → prefix do tekstu
-  const thinkPrefix = opts.think ? `${opts.think}: ` : "";
-  const body = `${thinkPrefix}${trimmed}`;
-  writeAndWarn(`${body}\r`, previewLabel(body));
-}
-
-function previewLabel(text: string): string {
-  const flat = text.replace(/\s+/g, " ").trim();
-  return flat.length > 60 ? flat.slice(0, 57) + "…" : flat;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
-}
-
 async function ensureTerminal(id: TerminalId): Promise<void> {
   const existing = terminalManager.get(id);
   if (existing) {
     existing.show(true);
     return;
   }
-  const terminal = terminalManager.create(id, vscode.ViewColumn.Two);
+  const terminal = terminalManager.create(id);
   terminal.show(true);
 }
 
@@ -233,10 +254,7 @@ async function addTerminal(id: TerminalId): Promise<void> {
     terminalManager.get(id)?.show(false);
     return;
   }
-  const parent = terminalManager.get(1);
-  const terminal = parent
-    ? terminalManager.create(id, { parentTerminal: parent })
-    : terminalManager.create(id, vscode.ViewColumn.Two);
+  const terminal = terminalManager.create(id);
   terminal.show(false);
   activeTerminalId = id;
   panelManager?.setActive(id);

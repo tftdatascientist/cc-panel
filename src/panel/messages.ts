@@ -12,18 +12,18 @@ export interface MessageDropItem {
 
 export type KeystrokeName = "esc" | "ctrlC" | "shiftTab";
 
-export type ModelChoice = "" | "opus" | "sonnet" | "haiku";
-
-export type EffortLevel = "" | "low" | "mid" | "hard" | "max";
-export type ThinkLevel  = "" | "think" | "think harder";
-
-export interface SendInputOptions {
-  text: string;
-  model: ModelChoice;
-  effort: EffortLevel;
-  think: ThinkLevel;
-  plan: boolean;
+export interface DashboardSnapshotDTO {
+  id: TerminalId;
+  model: string | null;
+  ctxPct: number | null;
+  totalTokens: number | null;
+  costUsd: number | null;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  phase: string | null;
 }
+
+export type DashboardMapDTO = Partial<Record<TerminalId, DashboardSnapshotDTO>>;
 
 export type PanelOutboundMessage =
   | {
@@ -31,28 +31,28 @@ export type PanelOutboundMessage =
       terminals: TerminalId[];
       activeId: TerminalId;
       slashCommands: DropItem[];
+      slashDropdown: DropItem[];
       userCommands: DropItem[];
       messages: MessageDropItem[];
+      dashboard: DashboardMapDTO;
     }
   | { type: "setActive"; id: TerminalId }
   | { type: "setTerminals"; terminals: TerminalId[] }
   | { type: "setSlashCommands"; slashCommands: DropItem[] }
   | {
       type: "setUserLists";
+      slashDropdown: DropItem[];
       userCommands: DropItem[];
       messages: MessageDropItem[];
-    };
+    }
+  | { type: "setDashboard"; dashboard: DashboardMapDTO };
 
 export type PanelInboundMessage =
   | { type: "ready" }
   | { type: "selectTerminal"; id: TerminalId }
   | { type: "addTerminal"; id: TerminalId }
-  | { type: "sendSlash"; index: number; extra?: string }
-  | { type: "sendUserCommand"; index: number; extra?: string }
-  | { type: "sendMessage"; index: number }
-  | { type: "sendInput"; options: SendInputOptions }
   | { type: "sendKeystroke"; name: KeystrokeName }
-  | { type: "sendChar"; data: string };
+  | { type: "sendRaw"; text: string };
 
 export function isTerminalId(n: unknown): n is TerminalId {
   return n === 1 || n === 2 || n === 3 || n === 4;

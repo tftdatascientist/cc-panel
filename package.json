@@ -48,6 +48,10 @@
         "title": "CC Panel: Install Hooks"
       },
       {
+        "command": "ccPanel.setProjectFolder",
+        "title": "CC Panel: Ustaw folder projektu"
+      },
+      {
         "command": "ccPanel.selectTerminal1",
         "title": "CC Panel: Select Terminal 1"
       },

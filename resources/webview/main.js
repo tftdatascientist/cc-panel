@@ -2,73 +2,68 @@
   // eslint-disable-next-line no-undef
   const vscode = acquireVsCodeApi();
 
-  // Elementy
-  const frame     = document.getElementById("frame");
-  const inputLine = document.getElementById("input-text");
-  const selMain   = document.getElementById("sel-main");
-  const btnSend   = document.getElementById("btn-send");
-  const selModel  = document.getElementById("sel-model");
-  const selEffort = document.getElementById("sel-effort");
-  const selThink  = document.getElementById("sel-think");
-  const cbPlan    = document.getElementById("cb-plan");
-  const btnEsc    = document.getElementById("btn-esc");
-  const btnCtrlC  = document.getElementById("btn-ctrlc");
-  const btnShiftTab = document.getElementById("btn-shifttab");
-  const modeChips = Array.from(document.querySelectorAll(".chip-mode"));
-  const termChips = Array.from(document.querySelectorAll(".chip-t"));
+  const frame       = document.getElementById("frame");
+  const inputLine   = document.getElementById("input-text");
+  const dataList    = document.getElementById("cmd-list");
+  const btnSend     = document.getElementById("btn-send");
+  const btnEsc      = document.getElementById("btn-esc");
+  const btnCtrlC    = document.getElementById("btn-ctrlc");
+  const btnDash     = document.getElementById("btn-dash");
+  const lastMsgBody = document.getElementById("last-msg-body");
+  const lastMsgMeta = document.getElementById("last-msg-meta");
+  const dashCells   = Array.from(document.querySelectorAll(".dash-cell"));
+  const termChips   = Array.from(document.querySelectorAll(".chip-t"));
 
-  // Stan
-  let activeMode = "cmd";          // cmd | user | text | input
   let activeTermId = 1;
   const enabledTerms = new Set([1]);
+  let dashboardState = {};
+  const unreadTerms = new Set();
+  const lastSeenMessageAt = new Map();
 
-  // Dane list
-  let slashItems = [];
-  let userItems  = [];
-  let textItems  = [];
+  const prevState = vscode.getState && vscode.getState();
+  let dashCollapsed = !!(prevState && prevState.dashCollapsed);
+  applyDashToggle();
 
-  // ── Tryb ────────────────────────────────────────────────────────────────────
+  // Wszystkie komendy w jednej liście: slash commands + user commands + messages
+  let allItems = [];
 
-  function setMode(mode) {
-    activeMode = mode;
-    for (const c of modeChips) c.classList.toggle("is-active", c.dataset.mode === mode);
-
-    // Dropdown widoczny tylko gdy nie-input
-    const showDrop = mode !== "input";
-    selMain.classList.toggle("hidden", !showDrop);
-    inputLine.placeholder = mode === "input"
-      ? "Wpisz — Enter = wyślij do terminala"
-      : "Opcjonalny tekst (Enter = wyślij dropdown)";
-
-    rebuildDrop();
-  }
-
-  function rebuildDrop() {
-    selMain.innerHTML = "";
-    let items = [];
-    if (activeMode === "cmd")  items = slashItems;
-    if (activeMode === "user") items = userItems;
-    if (activeMode === "text") items = textItems;
-
-    if (items.length === 0) {
-      const o = document.createElement("option");
-      o.value = "";
-      o.textContent = activeMode === "cmd"
-        ? "— brak slash commands —"
-        : "— brak — (edytuj w ustawienia.json)";
-      selMain.appendChild(o);
-      return;
+  function rebuildDatalist() {
+    dataList.innerHTML = "";
+    for (const it of allItems) {
+      const opt = document.createElement("option");
+      opt.value = it.value ?? it.text ?? "";
+      if (it.label && it.label !== opt.value) opt.label = it.label;
+      dataList.appendChild(opt);
     }
-    items.forEach((item, i) => {
-      const o = document.createElement("option");
-      o.value = String(i);
-      o.textContent = item.label ?? item.value ?? String(i);
-      o.title = item.value ?? item.text ?? "";
-      selMain.appendChild(o);
-    });
   }
 
-  // ── Terminale ───────────────────────────────────────────────────────────────
+  function mergeAllItems({ slashItems = [], slashDropdown = [], userItems = [], textItems = [] }) {
+    // Priorytet: własna lista slash (ustawienia.json) > statyczna > user commands > messages
+    const slash = slashDropdown.length ? slashDropdown : slashItems;
+    const merged = [];
+    for (const it of slash)     merged.push(it);
+    for (const it of userItems) merged.push(it);
+    for (const it of textItems) merged.push({ label: it.label, value: it.text });
+    return merged;
+  }
+
+  // Bieżące listy — aktualizowane partiami przez setSlashCommands / setUserLists
+  let _slashItems    = [];
+  let _slashDropdown = [];
+  let _userItems     = [];
+  let _textItems     = [];
+
+  function refreshAllItems() {
+    allItems = mergeAllItems({
+      slashItems:    _slashItems,
+      slashDropdown: _slashDropdown,
+      userItems:     _userItems,
+      textItems:     _textItems,
+    });
+    rebuildDatalist();
+  }
+
+  // ── Terminale ───────────────────────────────────────────────────────────
 
   function setTerminals(ids) {
     const s = new Set(ids.map(Number));
@@ -87,47 +82,101 @@
     frame.classList.remove("frame-t1", "frame-t2", "frame-t3", "frame-t4");
     frame.classList.add(`frame-t${n}`);
     for (const c of termChips) c.classList.toggle("is-active", Number(c.dataset.id) === n);
+    unreadTerms.delete(n);
+    renderDashboard();
   }
 
-  // ── Wysyłanie ───────────────────────────────────────────────────────────────
+  // ── Dashboard ───────────────────────────────────────────────────────────
 
-  function buildModifiers() {
-    return {
-      model:  selModel.value  || "",
-      effort: selEffort.value || "",
-      think:  selThink.value  || "",   // "" | "think" | "think harder"
-      plan:   !!cbPlan.checked,
-    };
+  function applyDashToggle() {
+    frame.classList.toggle("dash-collapsed", dashCollapsed);
+    if (btnDash) btnDash.textContent = dashCollapsed ? "▲" : "▼";
+    if (vscode.setState) vscode.setState({ dashCollapsed });
   }
+
+  function renderDashboard() {
+    for (const cell of dashCells) {
+      const id = Number(cell.dataset.id);
+      const metric = cell.dataset.metric;
+      const snap = dashboardState[id];
+      cell.dataset.active = id === activeTermId ? "true" : "false";
+      cell.dataset.stale = snap && snap.phase === "working" ? "true" : "false";
+      cell.textContent = formatMetric(snap, metric);
+    }
+    for (const chip of termChips) {
+      const id = Number(chip.dataset.id);
+      chip.dataset.unread   = unreadTerms.has(id) ? "true" : "false";
+      const snap = dashboardState[id];
+      // Wskaźnik pracy: pulsujący dot gdy working
+      chip.dataset.working  = (snap && snap.phase === "working") ? "true" : "false";
+      const ctxEl = chip.querySelector(".chip-term-ctx");
+      if (ctxEl) ctxEl.textContent = formatMetric(snap, "ctx");
+    }
+    const active = dashboardState[activeTermId];
+    if (active && active.lastMessage) {
+      lastMsgBody.textContent = active.lastMessage;
+      lastMsgMeta.textContent = formatMeta(active);
+    } else {
+      lastMsgBody.textContent = "—";
+      lastMsgMeta.textContent = "";
+    }
+  }
+
+  function formatMetric(snap, metric) {
+    if (!snap) return "—";
+    if (metric === "ctx") {
+      return typeof snap.ctxPct === "number" ? `${snap.ctxPct}%` : "—";
+    }
+    if (metric === "cost") {
+      return typeof snap.costUsd === "number" ? `$${snap.costUsd.toFixed(2)}` : "—";
+    }
+    if (metric === "total") {
+      return typeof snap.totalTokens === "number" ? formatTokens(snap.totalTokens) : "—";
+    }
+    return "—";
+  }
+
+  function formatTokens(n) {
+    if (n < 1000) return String(n);
+    if (n < 1_000_000) return `${(n / 1000).toFixed(1)}k`;
+    return `${(n / 1_000_000).toFixed(2)}M`;
+  }
+
+  function formatMeta(snap) {
+    const parts = [];
+    if (snap.model) parts.push(snap.model.replace(/^claude-/, ""));
+    if (snap.lastMessageAt) {
+      const t = new Date(snap.lastMessageAt);
+      if (!isNaN(t.getTime())) parts.push(t.toLocaleTimeString());
+    }
+    return parts.join(" · ");
+  }
+
+  function applyDashboard(map) {
+    dashboardState = map || {};
+    for (const idStr of Object.keys(dashboardState)) {
+      const id = Number(idStr);
+      const snap = dashboardState[id];
+      if (!snap || !snap.lastMessageAt) continue;
+      const prev = lastSeenMessageAt.get(id);
+      if (prev !== snap.lastMessageAt) {
+        lastSeenMessageAt.set(id, snap.lastMessageAt);
+        if (id !== activeTermId) unreadTerms.add(id);
+      }
+    }
+    renderDashboard();
+  }
+
+  // ── Wysyłanie ───────────────────────────────────────────────────────────
 
   function doSend() {
-    if (activeMode === "input") {
-      // Tryb input: tekst z pola + modyfikatory
-      const text = inputLine.value.trim();
-      if (!text) return;
-      vscode.postMessage({ type: "sendInput", options: { text, ...buildModifiers() } });
-      inputLine.value = "";
-      return;
-    }
-
-    // Tryby cmd/user/text: dropdown
-    if (selMain.value === "") return;
-    const idx = Number(selMain.value);
-    if (!Number.isFinite(idx)) return;
-
-    const extra = inputLine.value.trim(); // opcjonalny tekst doklejony po komendzie
-
-    if (activeMode === "cmd")  vscode.postMessage({ type: "sendSlash", index: idx, extra });
-    if (activeMode === "user") vscode.postMessage({ type: "sendUserCommand", index: idx, extra });
-    if (activeMode === "text") vscode.postMessage({ type: "sendMessage", index: idx });
+    const text = inputLine.value.trim();
+    if (!text) return;
+    vscode.postMessage({ type: "sendRaw", text: text + "\r" });
     inputLine.value = "";
   }
 
-  // ── Eventy UI ───────────────────────────────────────────────────────────────
-
-  for (const c of modeChips) {
-    c.addEventListener("click", () => setMode(c.dataset.mode));
-  }
+  // ── Eventy UI ───────────────────────────────────────────────────────────
 
   for (const c of termChips) {
     c.addEventListener("click", () => {
@@ -146,23 +195,6 @@
     if (e.key === "Enter") {
       e.preventDefault();
       doSend();
-      return;
-    }
-    if (e.key === "Escape") {
-      e.preventDefault();
-      vscode.postMessage({ type: "sendKeystroke", name: "esc" });
-      inputLine.value = "";
-      return;
-    }
-    if (e.ctrlKey && e.key === "c") {
-      e.preventDefault();
-      vscode.postMessage({ type: "sendKeystroke", name: "ctrlC" });
-      inputLine.value = "";
-      return;
-    }
-    if (e.shiftKey && e.key === "Tab") {
-      e.preventDefault();
-      vscode.postMessage({ type: "sendKeystroke", name: "shiftTab" });
     }
   });
 
@@ -176,12 +208,15 @@
     inputLine.value = "";
     inputLine.focus();
   });
-  btnShiftTab.addEventListener("click", () => {
-    vscode.postMessage({ type: "sendKeystroke", name: "shiftTab" });
-    inputLine.focus();
-  });
 
-  // ── Wiadomości z ekstensji ───────────────────────────────────────────────────
+  if (btnDash) {
+    btnDash.addEventListener("click", () => {
+      dashCollapsed = !dashCollapsed;
+      applyDashToggle();
+    });
+  }
+
+  // ── Wiadomości z ekstensji ──────────────────────────────────────────────
 
   window.addEventListener("message", (event) => {
     const msg = event.data;
@@ -190,10 +225,12 @@
       case "init":
         setTerminals(msg.terminals || [1]);
         setActive(msg.activeId || 1);
-        slashItems = msg.slashCommands || [];
-        userItems  = msg.userCommands  || [];
-        textItems  = msg.messages      || [];
-        rebuildDrop();
+        _slashItems    = msg.slashCommands || [];
+        _slashDropdown = msg.slashDropdown || [];
+        _userItems     = msg.userCommands  || [];
+        _textItems     = msg.messages      || [];
+        refreshAllItems();
+        applyDashboard(msg.dashboard || {});
         break;
       case "setActive":
         setActive(msg.id);
@@ -202,13 +239,17 @@
         setTerminals(msg.terminals || []);
         break;
       case "setSlashCommands":
-        slashItems = msg.slashCommands || [];
-        if (activeMode === "cmd") rebuildDrop();
+        _slashItems = msg.slashCommands || [];
+        refreshAllItems();
         break;
       case "setUserLists":
-        userItems = msg.userCommands || [];
-        textItems = msg.messages     || [];
-        if (activeMode === "user" || activeMode === "text") rebuildDrop();
+        _slashDropdown = msg.slashDropdown || [];
+        _userItems     = msg.userCommands  || [];
+        _textItems     = msg.messages      || [];
+        refreshAllItems();
+        break;
+      case "setDashboard":
+        applyDashboard(msg.dashboard || {});
         break;
     }
   });

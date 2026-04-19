@@ -2,12 +2,12 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as crypto from "crypto";
 import {
+  DashboardMapDTO,
   DropItem,
   KeystrokeName,
   MessageDropItem,
   PanelInboundMessage,
   PanelOutboundMessage,
-  SendInputOptions,
   TerminalId,
   isTerminalId,
 } from "./messages";
@@ -16,37 +16,46 @@ export interface PanelCallbacks {
   onReady?: () => void;
   onSelectTerminal?: (id: TerminalId) => void;
   onAddTerminal?: (id: TerminalId) => void;
-  onSendSlash?: (index: number, extra?: string) => void;
-  onSendUserCommand?: (index: number, extra?: string) => void;
-  onSendMessage?: (index: number) => void;
-  onSendInput?: (options: SendInputOptions) => void;
   onSendKeystroke?: (name: KeystrokeName) => void;
-  onSendChar?: (data: string) => void;
+  onSendRaw?: (text: string) => void;
 }
 
+export const VIEW_ID = "ccPanelView";
+const VIEW_TYPE = "ccPanel";
+const PANEL_TITLE = "CC Panel";
+
+/**
+ * PanelManager — tworzy pływający WebviewPanel w obszarze edytora.
+ * User przeciąga zakładkę do dolnej grupy edytora, żeby mieć panel tuż nad terminalem.
+ */
 export class PanelManager implements vscode.Disposable {
   private panel: vscode.WebviewPanel | undefined;
   private readonly subscriptions: vscode.Disposable[] = [];
   private activeId: TerminalId = 1;
   private terminals: TerminalId[] = [1];
   private slashCommands: DropItem[] = [];
+  private slashDropdown: DropItem[] = [];
   private userCommands: DropItem[] = [];
   private messages: MessageDropItem[] = [];
+  private dashboard: DashboardMapDTO = {};
 
   constructor(
     private readonly extensionUri: vscode.Uri,
     private readonly callbacks: PanelCallbacks = {}
   ) {}
 
+  // === API używane przez extension.ts ====================================
+
   setSlashCommands(items: DropItem[]): void {
     this.slashCommands = items;
     this.post({ type: "setSlashCommands", slashCommands: items });
   }
 
-  setUserLists(userCommands: DropItem[], messages: MessageDropItem[]): void {
+  setUserLists(slashDropdown: DropItem[], userCommands: DropItem[], messages: MessageDropItem[]): void {
+    this.slashDropdown = slashDropdown;
     this.userCommands = userCommands;
     this.messages = messages;
-    this.post({ type: "setUserLists", userCommands, messages });
+    this.post({ type: "setUserLists", slashDropdown, userCommands, messages });
   }
 
   setTerminals(ids: TerminalId[]): void {
@@ -59,30 +68,40 @@ export class PanelManager implements vscode.Disposable {
     this.post({ type: "setActive", id });
   }
 
-  openOrReveal(): vscode.WebviewPanel {
-    if (this.panel) {
-      this.panel.reveal(vscode.ViewColumn.One);
-      return this.panel;
-    }
+  setDashboard(dashboard: DashboardMapDTO): void {
+    this.dashboard = dashboard;
+    this.post({ type: "setDashboard", dashboard });
+  }
 
-    const panel = vscode.window.createWebviewPanel(
-      "ccPanel",
-      "CC Panel",
-      vscode.ViewColumn.One,
+  /**
+   * Tworzy nowy WebviewPanel lub reveale'uje istniejący.
+   * ViewColumn.Beside + preserveFocus=true — panel ląduje obok aktywnego edytora,
+   * user przeciąga zakładkę do dolnej grupy edytora (pod terminal) przy pierwszym użyciu.
+   */
+  async openOrReveal(): Promise<void> {
+    if (this.panel) {
+      this.panel.reveal(undefined, true);
+      return;
+    }
+    this.panel = vscode.window.createWebviewPanel(
+      VIEW_TYPE,
+      PANEL_TITLE,
+      { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       {
-        retainContextWhenHidden: true,
         enableScripts: true,
+        retainContextWhenHidden: true,
         localResourceRoots: [
           vscode.Uri.joinPath(this.extensionUri, "resources"),
         ],
       }
     );
 
-    panel.webview.html = this.renderHtml(panel.webview);
+    this.panel.webview.html = this.renderHtml(this.panel.webview);
 
-    const msgSub = panel.webview.onDidReceiveMessage((raw: unknown) => {
+    const msgSub = this.panel.webview.onDidReceiveMessage((raw: unknown) => {
       const msg = raw as Partial<PanelInboundMessage> | undefined;
       if (!msg || typeof msg.type !== "string") return;
+
       if (msg.type === "ready") {
         this.broadcastInit();
         this.callbacks.onReady?.();
@@ -98,38 +117,6 @@ export class PanelManager implements vscode.Disposable {
         if (isTerminalId(id)) this.callbacks.onAddTerminal?.(id);
         return;
       }
-      if (msg.type === "sendSlash") {
-        const m = msg as { index?: unknown; extra?: unknown };
-        if (typeof m.index === "number") {
-          this.callbacks.onSendSlash?.(m.index, typeof m.extra === "string" ? m.extra : undefined);
-        }
-        return;
-      }
-      if (msg.type === "sendUserCommand") {
-        const m = msg as { index?: unknown; extra?: unknown };
-        if (typeof m.index === "number") {
-          this.callbacks.onSendUserCommand?.(m.index, typeof m.extra === "string" ? m.extra : undefined);
-        }
-        return;
-      }
-      if (msg.type === "sendMessage") {
-        const index = (msg as { index?: unknown }).index;
-        if (typeof index === "number") this.callbacks.onSendMessage?.(index);
-        return;
-      }
-      if (msg.type === "sendInput") {
-        const options = (msg as { options?: unknown }).options as SendInputOptions | undefined;
-        if (options && typeof options.text === "string") {
-          this.callbacks.onSendInput?.({
-            text:   options.text,
-            model:  options.model  || "",
-            effort: options.effort || "",
-            think:  options.think  || "",
-            plan:   !!options.plan,
-          });
-        }
-        return;
-      }
       if (msg.type === "sendKeystroke") {
         const name = (msg as { name?: unknown }).name;
         if (name === "esc" || name === "ctrlC" || name === "shiftTab") {
@@ -137,27 +124,25 @@ export class PanelManager implements vscode.Disposable {
         }
         return;
       }
-      if (msg.type === "sendChar") {
-        const data = (msg as { data?: unknown }).data;
-        if (typeof data === "string" && data.length > 0) {
-          this.callbacks.onSendChar?.(data);
+      if (msg.type === "sendRaw") {
+        const text = (msg as { text?: unknown }).text;
+        if (typeof text === "string" && text.length > 0) {
+          this.callbacks.onSendRaw?.(text);
         }
         return;
       }
     });
 
-    const disposeSub = panel.onDidDispose(() => {
+    const disposeSub = this.panel.onDidDispose(() => {
       this.panel = undefined;
-      for (const s of this.subscriptions.splice(0)) s.dispose();
+      msgSub.dispose();
     });
 
     this.subscriptions.push(msgSub, disposeSub);
-    this.panel = panel;
-    return panel;
   }
 
   reveal(): void {
-    this.panel?.reveal(vscode.ViewColumn.One, true);
+    this.panel?.reveal(undefined, true);
   }
 
   dispose(): void {
@@ -166,14 +151,18 @@ export class PanelManager implements vscode.Disposable {
     this.panel = undefined;
   }
 
+  // === Internals =========================================================
+
   private broadcastInit(): void {
     this.post({
       type: "init",
       terminals: this.terminals,
       activeId: this.activeId,
       slashCommands: this.slashCommands,
+      slashDropdown: this.slashDropdown,
       userCommands: this.userCommands,
       messages: this.messages,
+      dashboard: this.dashboard,
     });
   }
 

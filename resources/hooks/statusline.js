@@ -77,6 +77,7 @@ process.stdin.on("end", () => {
         if (prev.phase_changed_at) state.phase_changed_at = prev.phase_changed_at;
         if (prev.last_message) state.last_message = prev.last_message;
         if (prev.last_message_at) state.last_message_at = prev.last_message_at;
+        if (prev.transcript_path) state.transcript_path = prev.transcript_path;
       }
     }
   } catch {
