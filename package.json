@@ -15,7 +15,7 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": ["onCommand:ccPanel.open", "onStartupFinished"],
   "main": "./out/extension.js",
   "contributes": {
     "commands": [
