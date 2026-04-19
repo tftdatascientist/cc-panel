@@ -1,6 +1,6 @@
 ## Meta
 - project: cc-panel
-- session: 12
+- session: 15
 - updated: 2026-04-19
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
@@ -34,8 +34,9 @@
   - Build: bundle 29.4 KB, `tsc --noEmit` czysto
 
 ## Current
-- state: `tsc --noEmit` czysto, bundle ~24 KB. VSIX `cc-panel-0.0.2.vsix` spakowany i zainstalowany — rozszerzenie działa bez F5/Extension Dev Host.
-- weryfikacja: `Ctrl+Shift+P → CC Panel: Open`, przeciągnij zakładkę do dolnej grupy lub poza okno. Dashboard wypełnia się po pierwszym Stop hooku CC.
+- state: `tsc --noEmit` czysto, bundle ~94 KB. VSIX `cc-panel-0.0.3.vsix` zainstalowany lokalnie (`lokalnaautomatyzacjabiznesu.cc-panel-0.0.3`).
+- publisher: `LokalnaAutomatyzacjaBiznesu`; VSIX 0.0.3 wgrany ręcznie na Marketplace.
+- slash commands: 34 pozycje; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
 
 ## Done — Session 11: dashboard w pływającym oknie (wariant X) ✅
 
@@ -65,17 +66,39 @@
 - ✅ **Ctx% bardziej widoczny** — `.chip-term-ctx`: `font-size 13px`, `font-weight 700`, kolor = kolor terminala (`--t-color`) na nieaktywnych; `--fg` na aktywnym (tło już podświetlone).
 - ✅ **VSIX packaging** — `npx vsce package --no-dependencies` → `cc-panel-0.0.2.vsix`. Zainstalowany przez `Install from VSIX`. Rozszerzenie uruchamiane bez F5/Extension Dev Host.
 
+## Done — Session 13 ✅
+
+- ✅ **Fix odczytu projectPaths w TerminalManager** — `create(id)` używało `workspaceFolders[0]` ignorując `ustawienia.json`. Dodano parametr `projectPath?` do `create()`. Helper `projectPathFor(id)` w `extension.ts` czyta `userListsStore.current().projectPaths[id-1]` i przekazuje przy spawnie.
+- ✅ **Widoczność folderu projektu w chipach T1-T4** — nowy `<span class="chip-term-folder">` w każdym chipie; pokazuje basename ścieżki, tooltip = pełna ścieżka. Aktualizuje się natychmiast po `ccPanel.setProjectFolder` (przez `pushUserLists` → `setProjectPaths`). Gdy nieustawiony — span `display:none` (CSS `:empty`).
+- ✅ **Nowy typ wiadomości `setProjectPaths`** — `messages.ts`, `PanelManager.setProjectPaths()`, propagacja w `broadcastInit` i `pushUserLists`.
+- ✅ **Publish na Marketplace** — publisher zmieniony z `local-dev` na `LokalnaAutomatyzacjaBiznesu` w package.json; VSIX 0.0.2 wgrany ręcznie przez marketplace.visualstudio.com/manage.
+
+## Done — Session 14 ✅
+
+- ✅ **Fix koloru ikon terminala** — `createTerminal` używał `new vscode.ThemeIcon("terminal")` bez drugiego argumentu → ikona szara. Poprawiono na `new vscode.ThemeIcon("terminal", new vscode.ThemeColor("ccPanel.terminal.t${id}"))`. Atrybut `color` (kolor zakładki) pozostał bez zmian.
+- ✅ **`/color` w slash commands** — dodano jako 1 wpis (lista 30 komend). Poprawione w sesji 15 na 5 wariantów z właściwymi nazwami CC CLI.
+- ✅ **Bypass permissions domyślnie włączony** — nowa opcja `ccPanel.bypassPermissions` (boolean, default `true`). Gdy `true`, CC spawnowany z flagą `--dangerously-skip-permissions`. Wyłączalna w Settings bez rekompilacji.
+- ✅ **Skracanie nazwy folderu w chipach** — `renderFolders()` ucina basename do 14 znaków + "…". Tooltip zawiera pełną ścieżkę. Zapobiega rozciąganiu chipów T1-T4.
+- ✅ **VSIX 0.0.3** — `cc-panel-0.0.3.vsix`, 49 KB, `tsc --noEmit` czysto. Stare wersje (`local-dev.cc-panel-0.0.1/0.0.2`, `LokalnaAutomatyzacjaBiznesu.cc-panel-0.0.2`) usunięte. Zainstalowany jedynie `lokalnaautomatyzacjabiznesu.cc-panel-0.0.3`.
+
+## Done — Session 15 ✅
+
+- ✅ **`/color` poprawione na warianty CC CLI** — 5 wpisów: `/color cyan (T1)`, `/color orange (T2)`, `/color purple (T3)`, `/color pink (T4)`, `/color random`. Poprzednie nazwy (teal/amber/coral) nie były w puli CC CLI.
+- ✅ **Usunięcie martwych komend VS Code** — weryfikacja: wszystkie 12 komend w `package.json` mają odpowiadający `registerCommand` w `extension.ts`; żadna nie była martwa.
+- ✅ **Dokumentacja komend** — `ARCHITECTURE.md` uzupełniony o tabelę 12 komend z dokładnym opisem działania, keybindingami i przepływem danych.
+- ✅ **ARCHITECTURE.md aktualizacja** — usunięte znaczniki `[PLANOWANE]`, poprawione liczby (34 slash commands), zaktualizowany data flow state.json, dodano `TranscriptReader.ts` do Key files.
+- ✅ **STATUS.md aktualizacja** — numer sesji, Current state, Slash commands count.
+
 ## Next
 
 - [ ] **Fix bugu T2-T4 env** — `CC_PANEL_TERMINAL_ID` nie dociera do procesu CC w split terminalach (patrz Known bugs)
-- [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku z zainstalowanego VSIX
+- [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji
+- [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu
 
 ## Known bugs
 - **T2-T4: `CC_PANEL_TERMINAL_ID` env nie dociera do procesu CC.** Dowód: user zainicjował T2 w sesji 11, ale `~/.claude/cc-panel/state.2.json` nie powstał (hook widzi env="" → `process.exit(0)` bo `!/^[1-4]$/.test("")`). Przyczyna prawdopodobna: `TerminalManager.create()` używa `vscode.window.createTerminal({env, location:{parentTerminal}})` — split terminal może dziedziczyć env parenta zamiast brać nowy `env` z opts. Dla T1 działa bo nie ma parenta (używa `TerminalLocation.Panel`). Fix: wszystkie terminale spawnować jako `TerminalLocation.Panel` (nie split parentTerminal), LUB zmienić strategię na dedykowany shell integration który przekazuje env przez `bash -c "CC_PANEL_TERMINAL_ID=2 claude"`.
 
 ## Backlog (niżej priorytetowe)
-- [ ] Fix bugu T2-T4 env (patrz Known bugs)
 - [ ] Weryfikacja ręczna — terminale CC startują i render poprawny (regresja sesji 9)
-- [ ] VSIX packaging + publishing
 - [ ] Testy jednostkowe: `tests/state/transcriptReader.test.ts` z fikstur JSONL (incremental cache, reset przy shrink, cost cumulative)

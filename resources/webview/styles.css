@@ -128,11 +128,11 @@ html, body {
 .chip-term-wide {
   flex: 1 1 0;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 8px;
   display: flex !important;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px;
   font-size: 12px;
 }
 .chip-term-id {
@@ -151,6 +151,21 @@ html, body {
 .chip-term-wide.is-active .chip-term-ctx {
   color: var(--fg);
 }
+
+.chip-term-folder {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: center;
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.8;
+}
+.chip-term-wide.is-active .chip-term-folder { color: color-mix(in srgb, var(--fg) 65%, transparent); }
+.chip-term-folder:empty { display: none; }
 
 /* ── Wskaźnik pracy (phase=working) ───────────────────────────────────────
    Pulsujący dot w lewym górnym rogu chipa. Kolor terminala, 6px, znika gdy

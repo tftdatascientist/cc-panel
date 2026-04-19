@@ -225,6 +225,7 @@ function pushUserLists(): void {
     lists.userCommands.map((c) => ({ ...c })),
     lists.messages.map((m) => ({ ...m }))
   );
+  panelManager.setProjectPaths([...lists.projectPaths] as [string, string, string, string]);
 }
 
 function writeAndWarn(data: string, label: string): boolean {
@@ -237,13 +238,17 @@ function writeAndWarn(data: string, label: string): boolean {
   return ok;
 }
 
+function projectPathFor(id: TerminalId): string | undefined {
+  return userListsStore?.current().projectPaths[id - 1] || undefined;
+}
+
 async function ensureTerminal(id: TerminalId): Promise<void> {
   const existing = terminalManager.get(id);
   if (existing) {
     existing.show(true);
     return;
   }
-  const terminal = terminalManager.create(id);
+  const terminal = terminalManager.create(id, projectPathFor(id));
   terminal.show(true);
 }
 
@@ -254,7 +259,7 @@ async function addTerminal(id: TerminalId): Promise<void> {
     terminalManager.get(id)?.show(false);
     return;
   }
-  const terminal = terminalManager.create(id);
+  const terminal = terminalManager.create(id, projectPathFor(id));
   terminal.show(false);
   activeTerminalId = id;
   panelManager?.setActive(id);

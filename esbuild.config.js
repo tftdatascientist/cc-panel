@@ -10,7 +10,7 @@ const options = {
   platform: "node",
   format: "cjs",
   target: "node20",
-  external: ["vscode", "node-pty", "chokidar", "fsevents"],
+  external: ["vscode", "node-pty", "fsevents"],
   sourcemap: !production,
   minify: production,
   logLevel: "info",

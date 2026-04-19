@@ -38,6 +38,7 @@ export class PanelManager implements vscode.Disposable {
   private userCommands: DropItem[] = [];
   private messages: MessageDropItem[] = [];
   private dashboard: DashboardMapDTO = {};
+  private projectPaths: [string, string, string, string] = ["", "", "", ""];
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -71,6 +72,11 @@ export class PanelManager implements vscode.Disposable {
   setDashboard(dashboard: DashboardMapDTO): void {
     this.dashboard = dashboard;
     this.post({ type: "setDashboard", dashboard });
+  }
+
+  setProjectPaths(projectPaths: [string, string, string, string]): void {
+    this.projectPaths = projectPaths;
+    this.post({ type: "setProjectPaths", projectPaths });
   }
 
   /**
@@ -163,6 +169,7 @@ export class PanelManager implements vscode.Disposable {
       userCommands: this.userCommands,
       messages: this.messages,
       dashboard: this.dashboard,
+      projectPaths: this.projectPaths,
     });
   }
 

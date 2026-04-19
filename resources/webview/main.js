@@ -11,8 +11,9 @@
   const btnDash     = document.getElementById("btn-dash");
   const lastMsgBody = document.getElementById("last-msg-body");
   const lastMsgMeta = document.getElementById("last-msg-meta");
-  const dashCells   = Array.from(document.querySelectorAll(".dash-cell"));
-  const termChips   = Array.from(document.querySelectorAll(".chip-t"));
+  const dashCells    = Array.from(document.querySelectorAll(".dash-cell"));
+  const termChips    = Array.from(document.querySelectorAll(".chip-t"));
+  const folderSpans  = Array.from(document.querySelectorAll(".chip-term-folder"));
 
   let activeTermId = 1;
   const enabledTerms = new Set([1]);
@@ -61,6 +62,18 @@
       textItems:     _textItems,
     });
     rebuildDatalist();
+  }
+
+  // ── Foldery projektów ───────────────────────────────────────────────────
+
+  function renderFolders(paths) {
+    for (const span of folderSpans) {
+      const id = Number(span.dataset.id);
+      const p = (paths && paths[id - 1]) || "";
+      const base = p ? p.replace(/\\/g, "/").split("/").pop() : "";
+      span.textContent = base.length > 14 ? base.slice(0, 13) + "…" : base;
+      span.title = p || "";
+    }
   }
 
   // ── Terminale ───────────────────────────────────────────────────────────
@@ -231,6 +244,7 @@
         _textItems     = msg.messages      || [];
         refreshAllItems();
         applyDashboard(msg.dashboard || {});
+        renderFolders(msg.projectPaths || ["", "", "", ""]);
         break;
       case "setActive":
         setActive(msg.id);
@@ -250,6 +264,9 @@
         break;
       case "setDashboard":
         applyDashboard(msg.dashboard || {});
+        break;
+      case "setProjectPaths":
+        renderFolders(msg.projectPaths || ["", "", "", ""]);
         break;
     }
   });

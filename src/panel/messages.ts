@@ -35,6 +35,7 @@ export type PanelOutboundMessage =
       userCommands: DropItem[];
       messages: MessageDropItem[];
       dashboard: DashboardMapDTO;
+      projectPaths: [string, string, string, string];
     }
   | { type: "setActive"; id: TerminalId }
   | { type: "setTerminals"; terminals: TerminalId[] }
@@ -45,7 +46,8 @@ export type PanelOutboundMessage =
       userCommands: DropItem[];
       messages: MessageDropItem[];
     }
-  | { type: "setDashboard"; dashboard: DashboardMapDTO };
+  | { type: "setDashboard"; dashboard: DashboardMapDTO }
+  | { type: "setProjectPaths"; projectPaths: [string, string, string, string] };
 
 export type PanelInboundMessage =
   | { type: "ready" }

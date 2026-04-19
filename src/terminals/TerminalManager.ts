@@ -16,28 +16,35 @@ export class TerminalManager implements vscode.Disposable {
     return [...this.terminals.keys()].sort((a, b) => a - b);
   }
 
-  create(id: number): vscode.Terminal {
+  create(id: number, projectPath?: string): vscode.Terminal {
     const existing = this.terminals.get(id);
     if (existing) {
       existing.terminal.show(true);
       return existing.terminal;
     }
 
-    const rawCwd = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.homedir();
+    const rawCwd =
+      (projectPath && projectPath.trim().length > 0 ? projectPath.trim() : null) ??
+      vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ??
+      os.homedir();
     const cwd = process.platform === "win32"
       ? rawCwd.replace(/^\/([a-zA-Z]):/, "$1:").replace(/\//g, "\\")
       : rawCwd;
 
     const command =
       vscode.workspace.getConfiguration("ccPanel").get<string>("command")?.trim() || "claude";
+    const bypassPerms = vscode.workspace
+      .getConfiguration("ccPanel")
+      .get<boolean>("bypassPermissions", true);
+    const fullCommand = bypassPerms ? `${command} --dangerously-skip-permissions` : command;
 
-    const shellCommand = buildShellCommand(id, command);
+    const shellCommand = buildShellCommand(id, fullCommand);
     console.log(`[cc-panel] createTerminal(id=${id}) shell=${vscode.env.shell} cmd=${shellCommand} cwd=${cwd}`);
 
     const terminal = vscode.window.createTerminal({
       name: `CC #${id}`,
       cwd,
-      iconPath: new vscode.ThemeIcon("terminal"),
+      iconPath: new vscode.ThemeIcon("terminal", new vscode.ThemeColor(`ccPanel.terminal.t${id}`)),
       color: new vscode.ThemeColor(`ccPanel.terminal.t${id}`),
       location: vscode.TerminalLocation.Panel,
     });

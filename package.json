@@ -2,8 +2,8 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.2",
-  "publisher": "local-dev",
+  "version": "0.0.3",
+  "publisher": "LokalnaAutomatyzacjaBiznesu",
   "private": true,
   "repository": {
     "type": "git",
@@ -144,6 +144,11 @@
           "type": "string",
           "default": "claude",
           "description": "Komenda CLI spawnowana w każdym terminalu (np. 'claude', 'cc'). Musi być widoczna w PATH z poziomu cmd.exe (Windows) / sh (macOS/Linux)."
+        },
+        "ccPanel.bypassPermissions": {
+          "type": "boolean",
+          "default": true,
+          "description": "Uruchom CC z flagą --dangerously-skip-permissions (brak pytań o uprawnienia narzędzi)."
         }
       }
     }
