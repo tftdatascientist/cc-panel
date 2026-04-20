@@ -13,9 +13,9 @@ Rozszerzenie VS Code do równoległej obsługi 1-4 sesji Claude Code z pływają
 2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `STATUS.md`/`ARCHITECTURE.md` na koniec sesji
 3. Numerację sesji w `STATUS.md → Current` inkrementuj przy istotnej zmianie (Done + Next + Current state)
 
-## Auto-Accept Mode (zaimplementowany, sesje 17-22)
+## Auto-Accept Mode (zaimplementowany, sesje 17-23)
 
-Pipeline: `TriggerDetector` (krawędź working→waiting) → `BudgetEnforcer` (time/iter/cost, każdy `null` = unlimited) → `HaikuHeadlessClient` (`claude -p --output-format json --model haiku`) → `CircuitBreaker` (similarity ≥0.80 + idle-length ±10%) → `writeToTerminal` → `SessionLogger` (JSONL append-only). Default budget: 15 min / $5.00 / 50 iter. **Realny koszt Haiku ~$0.07/iter** (cache_creation 58k tokens, zweryfikowane smoke testem 2026-04-20). Keybinding `Ctrl+Alt+A`. Scope: single-active globalnie (D2). Plan: `docs/AUTO_ACCEPT_PLAN.md`. **E2E (F5) jeszcze nieprzetestowane — nie bumpować VSIX 0.0.4 przed tym.**
+Pipeline: `TriggerDetector` (krawędź working→waiting) → `BudgetEnforcer` (time/iter/cost, każdy `null` = unlimited) → `HaikuHeadlessClient` (`claude -p --output-format json --model haiku`) → `CircuitBreaker` (similarity ≥0.80 + idle-length ±10%) → `writeToTerminal` → `SessionLogger` (JSONL append-only). Default budget: 15 min / $5.00 / 50 iter. **Realny koszt Haiku ~$0.07/iter** (cache_creation 58k tokens), po warm-upie (cache hit) ~$0.007/iter. Keybinding `Ctrl+Alt+A`. Scope: single-active globalnie (D2). Plan: `docs/AUTO_ACCEPT_PLAN.md`. **VSIX 0.0.4 zbudowany (2026-04-20), oczekuje na upload.**
 
 ## Commands
 

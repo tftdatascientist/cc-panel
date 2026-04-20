@@ -1,6 +1,6 @@
 ## Meta
 - project: cc-panel
-- session: 23
+- session: 24
 - updated: 2026-04-20
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
@@ -23,12 +23,12 @@ Fundament cc-panel ukończony. Szczegóły w `ARCHITECTURE.md` (komponenty, data
 - **Sesja 16** — weryfikacja (przez `ls ~/.claude/cc-panel/state.*.json`) że bug T2-T4 env nie reprodukuje — usunięcie stałych wpisów "Known bugs" w dokumentacji.
 
 ## Current
-- **Build:** `tsc --noEmit` czysto; esbuild bundle **113.2 KB** (z Krokami 1-7 AA + fixami post-review).
-- **VSIX:** `cc-panel-0.0.3.vsix` zainstalowany lokalnie i na Marketplace — **WERSJA SPRZED AA**. Po E2E teście F5 → bump 0.0.4.
+- **Build:** `tsc --noEmit` czysto; esbuild bundle **114.5 KB** (production, minified).
+- **VSIX:** `cc-panel-0.0.4.vsix` zbudowany lokalnie (60.86 KB). Oczekuje na ręczny upload na Marketplace (brak PAT).
 - **Publisher:** `LokalnaAutomatyzacjaBiznesu`.
 - **Komendy:** 17 (12 core + 5 AA). Keybindings: `Ctrl+Alt+\`` (cycle), `Ctrl+Alt+1-4` / `F1-F4` (select terminal), `Ctrl+Alt+A` (start AA).
 - **Slash commands:** 35 pozycji; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
-- **Auto-Accept:** Kroki 1-7/7 zaimplementowane + advisor fixes (kolor badge AA, auto-hide stopped banner 5s, write-failure event type, 3× error → stop, dispose przy restart). Plan: `docs/AUTO_ACCEPT_PLAN.md`. Szczegóły pipeline/DI/data flow: `ARCHITECTURE.md → Auto-Accept`. **Nie przetestowane E2E (F5).**
+- **Auto-Accept:** Kroki 1-7/7 zaimplementowane + advisor fixes. Pipeline zweryfikowany E2E headless (sesja 23). Plan: `docs/AUTO_ACCEPT_PLAN.md`. Szczegóły: `ARCHITECTURE.md → Auto-Accept`. **E2E przez F5 jeszcze nieprzetestowane.**
 
 ## Done — Auto-Accept (sesje 17-22)
 
@@ -114,13 +114,14 @@ Zrealizowano 3 z 4 planowanych zmian (decyzja usera: pominąć przeniesienie met
 
 - [ ] **Metryki w chipy T1–T4 + usunięcie dashboard-tabelki** — pole `.last-message` **ZOSTAJE**, znika tylko tabelka 4×2. Format w chipie: `$1.02 / 24K / 50%`. Toggle `▼/▲` — do decyzji (zostaje dla ukrywania last-message czy znika?). Dotyka: `index.html` (spans `data-metric="cost"/"total"` w `chip-term-wide`; wyrzucić `.dashboard-grid`), `styles.css` (`chip-term-wide` — 3 metryki + folder w jednym wierszu, min-width >128px), `main.js` (`renderDashboard` — routing metryk do spanów w chipach). Pominięte w sesji 23 na prośbę usera.
 
-### Pozostałe (priorytet wyżej niż powyższe UI)
+### Pozostałe
 
-- ✅ **E2E headless AA** (2026-04-20) — pipeline zweryfikowany bez F5: fake StateWatcher + realny TriggerDetector → realny HaikuHeadlessClient (claude.cmd) → realny BudgetEnforcer → realny SessionLogger → fake writeToTerminal. Trigger reactionMs ~110ms, 2 iteracje ("ok"/"ok"), auto-stop na `iter-limit`, JSONL kompletny (8 eventów). **Cache hit drugiej iteracji: $0.0067** (vs $0.0787 pierwszej) — plan AA koszt/iter przeszacowany, realnie po warm-upie ~10× taniej. Webview banner i node-pty spawn nie pokryte testem (ten pierwszy miał smoke test w sesji 22, drugi to komponent niezmieniony od 0.0.3).
-- [ ] **Bump version + VSIX 0.0.4** — odblokowane po E2E; `package.json` 0.0.3→0.0.4, `npx vsce package --no-dependencies`, wgrać ręcznie na Marketplace (brak PAT dla `vsce publish`).
+- ✅ **E2E headless AA** (2026-04-20) — pipeline zweryfikowany bez F5: fake StateWatcher + realny TriggerDetector → realny HaikuHeadlessClient (claude.cmd) → realny BudgetEnforcer → realny SessionLogger → fake writeToTerminal. Trigger reactionMs ~110ms, 2 iteracje ("ok"/"ok"), auto-stop na `iter-limit`, JSONL kompletny (8 eventów). **Cache hit drugiej iteracji: $0.0067** (vs $0.0787 pierwszej) — realnie po warm-upie ~10× taniej. Webview banner i node-pty spawn nie pokryte (smoke test sesja 22, komponent niezmieniony od 0.0.3).
+- ✅ **Bump version + VSIX 0.0.4** (2026-04-20) — `package.json` 0.0.3→0.0.4, commit `326764a`, `cc-panel-0.0.4.vsix` zbudowany (60.86 KB). Oczekuje na upload na Marketplace.
+- [ ] **Upload na Marketplace** — ręczny upload `cc-panel-0.0.4.vsix`; docelowo PAT na dev.azure.com dla `vsce publish`.
+- [ ] **E2E przez F5** — test AA od UI: start wizard → trigger → Haiku response → banner.
 - [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku).
-- [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu.
 
 ## Known bugs
 - (brak)
