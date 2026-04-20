@@ -11,6 +11,8 @@ Rozszerzenie VS Code do równoległej obsługi 1-4 sesji Claude Code z pływają
 
 > Przed przyjęciem zadania przeczytaj `STATUS.md` (bieżąca sesja, Done/Next/Known bugs) i `ARCHITECTURE.md` (layout, data flow, komendy). Jeśli wykryjesz rozbieżności z tym plikiem lub z rzeczywistością w kodzie — zaktualizuj dokumentację na koniec sesji.
 
+**Planowane (niezaimplementowane):** `docs/AUTO_ACCEPT_PLAN.md` — pełny plan trybu auto-accept (Haiku headless przez `claude -p`, triggerowany na krawędzi `working→waiting`, budget enforcer + circuit breaker). Status: `czeka-na-decyzje`. Nie implementować bez potwierdzenia od usera.
+
 ## Commands
 
 ```bash

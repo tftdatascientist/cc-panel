@@ -97,7 +97,8 @@
 
 ## Next
 
-- [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL)
+- [ ] **Auto-Accept Mode** — plan gotowy w `docs/AUTO_ACCEPT_PLAN.md` (status `czeka-na-decyzje`: budżet domyślny / keybinding / scope cap). Kolejność implementacji: `HaikuHeadlessClient.ts` → `SessionLogger.ts` → `TriggerDetector.ts` → `BudgetEnforcer.ts`+`CircuitBreaker.ts` → `AutoAcceptSession.ts` → Command Palette → webview banner.
+- [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku)
 - [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu
 
