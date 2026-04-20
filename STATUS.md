@@ -34,9 +34,10 @@
   - Build: bundle 29.4 KB, `tsc --noEmit` czysto
 
 ## Current
-- state: `tsc --noEmit` czysto, bundle ~94 KB. VSIX `cc-panel-0.0.3.vsix` zainstalowany lokalnie (`lokalnaautomatyzacjabiznesu.cc-panel-0.0.3`).
+- state: `tsc --noEmit` czysto (po Kroku 1 Auto-Accept); bundle ~94 KB (Auto-Accept jeszcze nie w bundle — nie zarejestrowane w extension.ts). VSIX `cc-panel-0.0.3.vsix` zainstalowany lokalnie (`lokalnaautomatyzacjabiznesu.cc-panel-0.0.3`) — **NIE przebudowany po Kroku 1**, aktualna wersja Marketplace bez AA.
 - publisher: `LokalnaAutomatyzacjaBiznesu`; VSIX 0.0.3 wgrany ręcznie na Marketplace.
 - slash commands: 35 pozycji; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
+- **Auto-Accept:** Krok 1/7 ukończony. `src/auto-accept/` zawiera `types.ts` + `HaikuHeadlessClient.ts`. Klient przetestowany empirycznie, ale **jeszcze nie podłączony nigdzie** — żadne komendy VS Code ani subskrypcje StateWatcher. Kolejne kroki 2-7 w Next. Plan: `docs/AUTO_ACCEPT_PLAN.md`. Branch `main`, 5 commitów przed `origin/main` (niewypchnięte).
 
 ## Done — Session 11: dashboard w pływającym oknie (wariant X) ✅
 
@@ -101,12 +102,21 @@
 - ✅ **CLAUDE.md refactor** — blockquote → sekcja `## Workflow` (3 numerowane kroki); luźna notka "Planowane" → `## Auto-Accept Mode` z realnym kosztem Haiku; duplikat "Layout i źródło metryk" → pointer do ARCHITECTURE.md (dedup 9 linii). Commit `e41323f`.
 - ✅ **Smoke test `claude -p --output-format json --model haiku`** — kontrakt CLI zgodny z planem (pola `result`, `total_cost_usd`, `duration_ms`, `usage`). **Realny koszt ~$0.0730/iter** (cache_creation 58046 input tokens) — 35× więcej niż zakładał plan ($0.002). `--model haiku` → alias dla `claude-haiku-4-5-20251001`. Przy budżecie $1 → ~14 iter, nie 500.
 - ✅ **Audit dokumentacji (Session 17)** — wykryta i naprawiona rozbieżność: slash commands 34 → 35 w CLAUDE.md, ARCHITECTURE.md (2×), STATUS.md. Realny count `SLASH_COMMANDS` = 35 pozycji w `src/settings/slashCommands.ts`.
-- ✅ **Decyzje usera ws. Auto-Accept** — keybinding `Ctrl+Alt+A` ✅; scope `single-active globalnie` (MVP) ✅; budget domyślny OK **ale wymaga opcji "bez limitu"** (semantyka a/b/c: tylko czas / czas+cost / wszystkie 3 — pending, rekomendacja advisora: wariant b z iter cap 500 jako backstop przed runaway loop).
+- ✅ **Decyzje usera ws. Auto-Accept (wszystkie rozstrzygnięte 2026-04-20):**
+  - D1 keybinding: `Ctrl+Alt+A` ✅
+  - D2 scope MVP: single-active globalnie (1 sesja AA naraz, nie per-terminal) ✅
+  - D3 budget domyślny: 15 min / $5.00 / 50 iter (cost urealniony z $1 po smoke teście — realny ~$0.07/iter) ✅
+  - D4 semantyka "bez limitu": **wariant (c)** — wszystkie 3 limity mogą być `null` (time+cost+iter unlimited). Jedyne hard-stopy wtedy: user stop, circuit breaker, panel dispose, 3× exit!=0. **Implikacja:** CircuitBreaker musi być bardziej agresywny (threshold 0.80 zamiast 0.85 + dodatkowa heurystyka `idle-iterations` — brak progresu = stop)
+- ✅ **Krok 1 implementacji Auto-Accept** (commit `01c7fef`) — `src/auto-accept/types.ts` (AutoAcceptConfig z `number|null`, AutoAcceptStopReason, HaikuResponse, IterationRecord, AutoAcceptStatus) + `src/auto-accept/HaikuHeadlessClient.ts` (resolveClaudePath z PATH scan na claude.cmd/exe/bare, `invokeHaiku({prompt,systemPrompt,signal,timeoutMs})`, HaikuCliError z exitCode+stderr). **Gotcha rozwiązany:** Windows Node 20+ CVE-2024-27980 — execFile odmawia uruchomienia `.cmd/.bat` bez `shell:true`; conditional `shell:true` gdy resolved path to `.cmd/.bat`. **Smoke test live (node + esbuild bundle) ✅:** prompt "Reply with exactly: OK" → result="OK", koszt $0.0739, sessionId OK; AbortController.abort() po 500ms → AbortError (in-flight cancel działa).
 
 ## Next
 
-- [ ] **Auto-Accept MVP — rozpoczęcie implementacji** wg `docs/AUTO_ACCEPT_PLAN.md`. Kolejność: `HaikuHeadlessClient.ts` (execFile + AbortController + timeout 60s) → `SessionLogger.ts` (appendFileSync JSONL) → `TriggerDetector.ts` (per-terminal lastPhase map) → `BudgetEnforcer.ts`+`CircuitBreaker.ts` (Levenshtein > 0.85) → `AutoAcceptSession.ts` (orkiestrator) → Command Palette (5 komend + keybinding Ctrl+Alt+A) → webview banner. **Default `costLimitUsd: 5.00`** (nie 1.00 z planu — urealnione po smoke teście).
-- [ ] **Dopytać: semantyka "bez limitu"** (a/b/c) przed pisaniem `BudgetEnforcer.ts`.
+- [ ] **Krok 2 Auto-Accept — `SessionLogger.ts`** — append-only JSONL do `~/.claude/cc-panel/aa-sessions.jsonl`. Format eventów w `docs/AUTO_ACCEPT_PLAN.md → Format logu JSONL` (session-start / trigger / haiku-response / send-to-tN / session-stop). Prosty, trywialny. Wymaga tylko: `fs.appendFileSync`, `crypto.randomUUID()` dla sessionId, utility `logEvent(type, payload)`.
+- [ ] **Krok 3 Auto-Accept — `TriggerDetector.ts`** — subscribe do `StateWatcher.onChange` (ale filtrowanie: monitoruje tylko terminal objęty AA); per-terminal `lastPhase = Map<TerminalId, 'working'|'waiting'|undefined>`; emit `waiting-edge` tylko gdy `working→waiting`; opcjonalny debounce 3000ms (z planu).
+- [ ] **Krok 4 Auto-Accept — `BudgetEnforcer.ts` + `CircuitBreaker.ts`** — BudgetEnforcer.check(): przelicza cumulative cost ze state.{id}.json (diff od startedAt), compare do `costLimitUsd` (skip jeśli null). CircuitBreaker: Levenshtein ratio na ostatnich 3 outputach Haiku, threshold 0.80 (D4 implikacja), + idle heurystyka (3× z rzędu ten sam response-length ±10% = podejrzane).
+- [ ] **Krok 5 Auto-Accept — `AutoAcceptSession.ts`** — orkiestrator składający wszystko: TriggerDetector.on('waiting-edge') → BudgetEnforcer.check() → jeśli OK: HaikuHeadlessClient.invoke() → CircuitBreaker.analyze(response) → writeAndWarn(response.result + '\r') do aktywnego terminala → SessionLogger.append(). onDispose: abort pending invoke, log session-stop.
+- [ ] **Krok 6 Auto-Accept — Command Palette wiring** (`extension.ts`) — 5 komend (startAutoAccept, stopAutoAccept, editAutoAcceptSystemPrompt, showAutoAcceptHistory, autoAcceptStatus) + keybinding `Ctrl+Alt+A` → `ccPanel.startAutoAccept`. QuickPick wizard dla startu (terminal T1-T4 → czas 5m/15m/1h/5h/∞ → cost limit $ (0=bez limitu) → iter limit (0=bez limitu) → system prompt Y/N).
+- [ ] **Krok 7 Auto-Accept — webview banner** — pod paskiem kontrolnym gdy AA aktywny: "AA: T# · iter N/L · cost $X/$Y · time left" + przycisk Stop. Nowy typ message `setAutoAcceptStatus` w `messages.ts`.
 - [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku).
 - [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu.
