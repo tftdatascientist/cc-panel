@@ -11,7 +11,7 @@
 | D1 | Keybinding startu AA | **`Ctrl+Alt+A`** ✅ | user 2026-04-20 |
 | D2 | Scope cap w MVP | **single-active globalnie** (1 aktywna sesja AA naraz, nie per-terminal) | user 2026-04-20 |
 | D3 | Budżet domyślny | **15 min / $5.00 / 50 iter** (cost urealniony z $1 → $5 po smoke teście — realny koszt Haiku headless ~$0.07/iter) + **wymagana opcja "bez limitu"** | user 2026-04-20 + smoke test |
-| D4 | Semantyka "bez limitu" (a/b/c) | **PENDING** — do rozstrzygnięcia przed `BudgetEnforcer.ts`. Rekomendacja: **wariant (b)** — time+cost unlimited, iter cap 500 jako backstop przed runaway loop | advisor |
+| D4 | Semantyka "bez limitu" | **wariant (c)** — wszystkie 3 limity (time/cost/iter) mogą być `null` (unlimited). Jedyne hard-stopy wtedy: user stop, circuit breaker, panel dispose, 3× exit!=0. Implikacja: **CircuitBreaker musi być bardziej agresywny** (threshold 0.80 zamiast 0.85 + dodatkowa heurystyka `idle-iterations` — brak progresu = stop) | user 2026-04-20 |
 
 ## Smoke test CLI (2026-04-20)
 
