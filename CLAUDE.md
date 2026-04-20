@@ -9,9 +9,17 @@ Rozszerzenie VS Code do równoległej obsługi 1-4 sesji Claude Code z pływają
 @STATUS.md
 @ARCHITECTURE.md
 
-> Przed przyjęciem zadania przeczytaj `STATUS.md` (bieżąca sesja, Done/Next/Known bugs) i `ARCHITECTURE.md` (layout, data flow, komendy). Jeśli wykryjesz rozbieżności z tym plikiem lub z rzeczywistością w kodzie — zaktualizuj dokumentację na koniec sesji.
+## Workflow
 
-**Planowane (niezaimplementowane):** `docs/AUTO_ACCEPT_PLAN.md` — pełny plan trybu auto-accept (Haiku headless przez `claude -p`, triggerowany na krawędzi `working→waiting`, budget enforcer + circuit breaker). Status: `czeka-na-decyzje`. Nie implementować bez potwierdzenia od usera.
+1. Przeczytaj `STATUS.md` (bieżąca sesja, Done/Next/Known bugs) i `ARCHITECTURE.md` (layout, data flow, komendy)
+2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `STATUS.md`/`ARCHITECTURE.md` na koniec sesji
+3. Numerację sesji w `STATUS.md → Current` inkrementuj przy istotnej zmianie (Done + Next + Current state)
+
+## Auto-Accept Mode (planowane, nie implementować bez potwierdzenia)
+
+Pełny plan w `docs/AUTO_ACCEPT_PLAN.md`: Haiku headless przez `claude -p --output-format json --model haiku`, trigger na krawędzi `working→waiting`, budget enforcer + circuit breaker (Levenshtein > 0.85).
+
+**Status:** `czeka-na-decyzje` (budget domyślny / keybinding / scope cap). **Realny koszt Haiku headless ~$0.07/iter** (cache_creation 58k tokens), NIE ~$0.002 jak wstępnie zakładał plan — zweryfikowane smoke testem 2026-04-20. Urealnić `costLimitUsd` default (5.00 zamiast 1.00) przed implementacją.
 
 ## Commands
 
@@ -58,18 +66,9 @@ Brak test runnera w repo — nie ma `npm test`. Weryfikacja przez `compile-types
 - `resources/hooks/` — `statusline.js` (chain-capable, liczy ctx_pct, merge z prev state), `userpromptsubmit.js` (phase=working + transcript_path), `stop.js` (phase=waiting + last_message z JSONL)
 - `resources/webview/` — `index.html` (bar-top input+▶+Esc+^C+▼ / bar-terms chipy T1-T4 / dashboard section), `styles.css`, `main.js`
 
-## Layout i źródło metryk
+## Layout
 
-Webview ma **dwa wiersze + opcjonalny dashboard** (nie "20/60/20" z dokumentacji MVP):
-```
-[input (flex)][▶] │ [Esc][^C] │ [▼]           ← bar-top ~40px
-[T1][T2][T3][T4]  (id │ folder │ Ctx%)        ← bar-terms ~34px
-[section.dashboard — Cost/Total tabela + last-message]  ← toggleable (▼/▲)
-```
-- Chipy T1-T4: kolor teal/amber/purple/coral; aktywny podświetlony; disabled → klik = addTerminal; pulsujący dot gdy `phase=working`; badge gdy nieaktywny dostał wiadomość
-- Ctx% widoczny bezpośrednio w chipie (kolor terminala, bold); tło chipa aktywnego = `--accent 18%`
-- Dashboard toggle persistowany przez `vscode.getState()/setState()` webview
-- Input + jeden `<datalist>` scala slash commands + user commands + messages (brak trybów)
+Szczegóły layoutu panelu (bar-top / bar-terms / dashboard) — patrz `ARCHITECTURE.md → Panel layout`. W skrócie: dwa wiersze kontrolek + opcjonalny dashboard (toggle `▼/▲`, persistencja w `vscode.getState()/setState()`). Jeden `<datalist>` scala slash commands + user commands + messages (brak trybów).
 
 ## Specifics (nietykalne zasady)
 
