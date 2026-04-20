@@ -167,23 +167,56 @@ html, body {
 .chip-term-wide.is-active .chip-term-folder { color: color-mix(in srgb, var(--fg) 65%, transparent); }
 .chip-term-folder:empty { display: none; }
 
-/* ── Wskaźnik pracy (phase=working) ───────────────────────────────────────
-   Pulsujący dot w lewym górnym rogu chipa. Kolor terminala, 6px, znika gdy
-   waiting. Nie blokuje żadnego tekstu, rzuca się w oczy bez nadmiernej animacji. */
+/* ── Wskaźniki fazy (working / waiting) ───────────────────────────────────
+   Maksymalnie rozróżnione, żeby user natychmiast widział co robi CC:
+   - working: pulsujący glow (box-shadow nie modyfikuje layoutu) + tło w kolorze
+              terminala + pulsujący dot w lewym górnym rogu. Trzy sygnały naraz.
+   - waiting: stały outline (box-shadow, nie border-width żeby nie skakało) +
+              pełny statyczny dot w innej pozycji (prawy górny) + delikatne tło.
+   - idle:   nic (brak fazy jeszcze).
+   box-shadow zamiast border-width = zero layout shift przy przełączaniu faz. */
 @keyframes cc-pulse {
   0%, 100% { opacity: 1;   transform: scale(1);    }
   50%       { opacity: 0.4; transform: scale(0.75); }
 }
-.chip-t[data-working="true"]::before {
+@keyframes cc-glow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--t-color), 0 0 8px 2px color-mix(in srgb, var(--t-color) 50%, transparent); }
+  50%      { box-shadow: 0 0 0 2px var(--t-color), 0 0 14px 4px color-mix(in srgb, var(--t-color) 75%, transparent); }
+}
+
+/* WORKING — pulsujący glow + tło + dot. Trzy warstwy sygnału. */
+.chip-t[data-phase="working"] {
+  background: color-mix(in srgb, var(--t-color) 20%, var(--bg)) !important;
+  animation: cc-glow 1.4s ease-in-out infinite;
+}
+.chip-t[data-phase="working"]::before {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  width: 7px;
+  height: 7px;
+  background: var(--t-color);
+  border-radius: 50%;
+  animation: cc-pulse 1.4s ease-in-out infinite;
+  box-shadow: 0 0 6px var(--t-color);
+}
+
+/* WAITING — statyczny outline + solidny dot. Wyraźnie inny od working. */
+.chip-t[data-phase="waiting"] {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-color) 50%, transparent);
+}
+.chip-t[data-phase="waiting"]::before {
   content: "";
   position: absolute;
   top: 3px;
   left: 4px;
   width: 6px;
   height: 6px;
-  background: var(--t-color);
+  background: transparent;
+  border: 1.5px solid var(--t-color);
   border-radius: 50%;
-  animation: cc-pulse 1.4s ease-in-out infinite;
+  opacity: 0.75;
 }
 
 /* Badge "nowa wiadomość" — prawy górny róg */
@@ -228,6 +261,71 @@ html, body {
   font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
   font-size: 10px;
   padding: 0 7px;
+}
+
+/* ═══ AUTO-ACCEPT BANNER ══════════════════════════════════════════════════
+   Cienki pasek (~26px) pod bar-top, widoczny tylko gdy AA aktywny. Żółta
+   ramka + pulsujący dot sygnalizują: "ekstensja wysyła za Ciebie komendy".
+   Stop button → postMessage stopAutoAccept → AutoAcceptSession.stop("user-stop"). */
+.aa-banner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 26px;
+  background: color-mix(in srgb, #fbbf24 14%, var(--bg));
+  border-top: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+.aa-banner[hidden] { display: none; }
+.aa-banner[data-state="stopped"] {
+  background: color-mix(in srgb, var(--fg) 8%, var(--bg));
+  border-color: var(--border);
+}
+.aa-banner-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #fbbf24;
+  animation: cc-pulse 1.4s ease-in-out infinite;
+}
+.aa-banner[data-state="stopped"] .aa-banner-dot {
+  background: var(--muted);
+  animation: none;
+}
+.aa-banner-label {
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #fbbf24;
+}
+.aa-banner[data-state="stopped"] .aa-banner-label { color: var(--muted); }
+.aa-banner-term {
+  font-weight: 700;
+  padding: 0 4px;
+  border-radius: 2px;
+  /* --t-color ustawione przez klasę chip-t1..4 dodawaną w JS; fallback --accent gdy brak AA */
+  background: color-mix(in srgb, var(--t-color, var(--accent)) 30%, var(--bg));
+  color: var(--t-color, var(--fg));
+}
+.aa-banner-sep { color: var(--muted); }
+.aa-banner-metric { color: var(--fg); }
+.aa-banner-metric.is-limit-near { color: #fbbf24; font-weight: 700; }
+.aa-banner-spacer { flex: 1 1 auto; }
+.aa-banner-stop {
+  height: 20px;
+  padding: 0 8px;
+  font-weight: 700;
+  background: color-mix(in srgb, #ef4444 25%, var(--bg));
+  border-color: #ef4444;
+  color: #fca5a5;
+}
+.aa-banner-stop:hover {
+  background: color-mix(in srgb, #ef4444 40%, var(--bg));
+  color: var(--fg);
 }
 
 /* ═══ DASHBOARD ═══════════════════════════════════════════════════════════ */

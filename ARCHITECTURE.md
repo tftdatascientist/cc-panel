@@ -54,10 +54,15 @@ Wszystkie komendy zarejestrowane w `package.json` mają odpowiadający `register
 | `ccPanel.reloadUserLists` | CC Panel: Reload ustawienia.json | – | Wymusza odczyt `ustawienia.json` z dysku (przydatne po ręcznej edycji pliku). |
 | `ccPanel.installHooks` | CC Panel: Install Hooks | – | Wywołuje `installHooks(extensionUri)`: upsertuje `~/.claude/settings.json` wstawiając/aktualizując 3 hooki CC: `statusLine`, `UserPromptSubmit`, `Stop`. |
 | `ccPanel.setProjectFolder` | CC Panel: Ustaw folder projektu | – | Pokazuje QuickPick z 4 slotami T1–T4 (z kolorami teal/amber/purple/coral i aktualną ścieżką). Po wyborze slotu otwiera `showOpenDialog` (folder picker). Zapisuje przez `userListsStore.saveProjectPath(id, path)`; webview natychmiast dostaje `setProjectPaths`. |
+| `ccPanel.startAutoAccept` | CC Panel: Start Auto-Accept | `Ctrl+Alt+A` | 5-krokowy wizard QuickPick: terminal → czas → cost → iter → system prompt. Tworzy `AutoAcceptSession` z DI (TriggerDetector + HaikuHeadlessClient + writeToTerminal + TranscriptReader). Przy aktywnej sesji pyta o restart. |
+| `ccPanel.stopAutoAccept` | CC Panel: Stop Auto-Accept | – | `autoAcceptSession.stop("user-stop")`. No-op gdy sesja nieaktywna. |
+| `ccPanel.autoAcceptStatus` | CC Panel: Auto-Accept Status | – | `showInformationMessage` z `AutoAcceptStatus`: terminal, iter N/L, cost $X/$Y. |
+| `ccPanel.showAutoAcceptHistory` | CC Panel: Auto-Accept History | – | QuickPick z 20 ostatnich sesji z `readRecentSessions()` (`~/.claude/cc-panel/aa-sessions.jsonl`). Pokazuje `sessionId` wybranej sesji. |
+| `ccPanel.editAutoAcceptSystemPrompt` | CC Panel: Edit Auto-Accept System Prompt | – | InputBox do edycji `ccPanel.autoAcceptSystemPrompt` (workspace configuration, Global). |
 
 ## Components
 
-- **extension.ts** — entry point; rejestracja 12 komend; `writeAndWarn()`; `cycleActiveTerminal()`; `selectTerminal()`; `projectPathFor(id)`; forward `StateWatcher.onChange` → `PanelManager.setDashboard`
+- **extension.ts** — entry point; rejestracja **17 komend** (12 core + 5 AA); `writeAndWarn()`; `cycleActiveTerminal()`; `selectTerminal()`; `projectPathFor(id)`; forward `StateWatcher.onChange` → `PanelManager.setDashboard`; `startAutoAccept()` orchestrator; `toAutoAcceptDTO()` mapper; dispose w kolejności `autoAcceptSession → stateWatcher → panelManager → terminalManager`
 
 - **PanelManager** — `vscode.window.createWebviewPanel` z `ViewColumn.Beside + preserveFocus`; `broadcastInit()` przy `ready`; routing wszystkich inbound messages; `setSlashCommands()` postuje do webview gdy panel otwarty; `onDidDispose` → zerowanie `this.panel`
 
@@ -114,13 +119,85 @@ StateWatcher (src/state/StateWatcher.ts):
   → webview renderuje tabelkę 4×2 (Cost/Total) + last_message aktywnego terminala
 ```
 
+## Auto-Accept (zaimplementowany, sesje 17-22)
+
+Headless Haiku wypełnia pole "czy kontynuować?" w imieniu usera — trigger na krawędzi `working→waiting`, odpowiedź wysyłana jako raw text do aktywnego terminala. Pełny plan: `docs/AUTO_ACCEPT_PLAN.md`.
+
+**Single-active globalnie (D2):** jedna sesja AA naraz, niezależnie ile terminali działa.
+
+### Pipeline
+
+```
+StateWatcher.onChange (DashboardMap)
+  ↓  (filtruje activeTerminalId)
+TriggerDetector (debounce 3s)
+  ↓  onTrigger({terminalId, timestamp, reactionMs})
+AutoAcceptSession.handleTrigger()
+  ├─ BudgetEnforcer.check(now) → time-limit | iter-limit | cost-limit
+  ├─ TranscriptReader.readRecentMessages(limit=5)
+  ├─ buildPromptWithContext(metaPrompt, recent) → preamble + role-labeled snippets + separator + meta
+  ├─ HaikuHeadlessClient.invokeHaiku({prompt, signal, timeoutMs})
+  │     (claude -p --output-format json --model haiku)
+  ├─ CircuitBreaker.analyze(response) → similarity≥0.80 OR idle-length±10%
+  │     (sliding window ostatnich 3 odpowiedzi)
+  ├─ writeToTerminal(id, result + "\r")
+  └─ SessionLogger.logHaikuResponse() / logSendToTerminal()
+```
+
+Emituje `onStatus(AutoAcceptStatus)` po każdej zmianie — extension forwarduje do PanelManager, ten wysyła do webview jako `AutoAcceptStatusDTO`.
+
+### DI pattern
+
+`AutoAcceptSession` przyjmuje `AutoAcceptDeps`:
+- `triggerDetector: TriggerDetector` — emituje krawędzie working→waiting
+- `haikuClient: { invokeHaiku(...) }` — abstrakcja nad `HaikuHeadlessClient`
+- `writeToTerminal(id, text): boolean` — `terminalManager.write`; fail → `stop("cli-errors")`
+- `getRecentMessages(id, limit): Promise<Message[]>` — `TranscriptReader.readRecentMessages` via `stateWatcher.getTranscriptPath(id)`
+
+Testowalność: smoke testy w sesji 20 (33 asercje) z fake'ami trigger/haiku/write/getRecent.
+
+### Stop reasons
+
+`AutoAcceptStopReason = "user-stop" | "time-limit" | "iter-limit" | "cost-limit" | "circuit-breaker" | "cli-errors" | "panel-dispose"`
+
+- **user-stop** — komenda `ccPanel.stopAutoAccept` lub Stop button w webview banner
+- **time/iter/cost-limit** — BudgetEnforcer.check przed i po iteracji
+- **circuit-breaker** — pętla wykryta (3× podobna odpowiedź lub 3× ta sama długość)
+- **cli-errors** — 3× kolejny exit!=0 z Haiku LUB `writeToTerminal returns false`
+- **panel-dispose** — deactivate() lub dispose
+
+### Webview banner
+
+Cienki pasek ~26px pod `bar-top` (nad `bar-terms`):
+```
+● AA T3 · iter 7/50 · $0.51/$5.00 · time 12m30s · [Stop]
+```
+- `data-state="active"` — pulsujący żółty dot, tło `#fbbf24 14%`
+- `data-state="stopped"` — szary dot, auto-hide po 5s (`aaHideTimer`)
+- Countdown liczony **lokalnie w webview** (interval 1s) — extension pushuje status tylko przy zmianie stanu
+- Kolor `T#` badge zgodny z AA terminalem (nie aktywnym chipem panelu) — przez fallback `var(--t-color, var(--accent))` i klasę `chip-t1..4` dodawaną w JS
+- Stop button → `postMessage({type:"stopAutoAccept"})` → `autoAcceptSession.stop("user-stop")`
+
+### Logowanie (`~/.claude/cc-panel/aa-sessions.jsonl`)
+
+Append-only JSONL. 7 typów eventów (discriminated union):
+- `session-start` — config, sessionId, terminalId
+- `trigger` — krawędź wykryta, reactionMs
+- `haiku-response` — result, costUsd, durationMs, iterationIdx
+- `haiku-error` — exitCode, stderr, iterationIdx
+- `send-to-terminal` — text (skrócony do 200 zn.)
+- `write-failure` — writeToTerminal zwróciło false (dedykowany event, nie recyklowany haiku-error)
+- `session-stop` — stopReason, finalCostUsd, totalIterations
+
+`readRecentSessions(limit=20)` zwraca ostatnie starty do QuickPick'a historii.
+
 ## Key files
 ```
 src/
-  extension.ts              routing, komendy, writeAndWarn, cycleActive
+  extension.ts              routing, 17 komend, writeAndWarn, cycleActive, startAutoAccept, toAutoAcceptDTO
   panel/
-    PanelManager.ts         createWebviewPanel(ViewColumn.Beside), broadcastInit, routing
-    messages.ts             TS types dla inbound/outbound message
+    PanelManager.ts         createWebviewPanel(ViewColumn.Beside), broadcastInit, routing, setAutoAccept
+    messages.ts             TS types + AutoAcceptStatusDTO + setAutoAccept/stopAutoAccept
   terminals/
     TerminalManager.ts      lazy spawn z fallback, /k na Windows, spawnDone flag, env CC_PANEL_TERMINAL_ID
   settings/
@@ -130,13 +207,22 @@ src/
   hooks/
     installHooks.ts         upsert ~/.claude/settings.json (statusLine + UserPromptSubmit + Stop)
   state/
-    StateWatcher.ts         chokidar na state.*.json + transcript JSONL, event emitter
-    TranscriptReader.ts     tail read JSONL z cache incremental, parse cost/total tokenów
+    StateWatcher.ts         chokidar na state.*.json + transcript JSONL, event emitter, getTranscriptPath(id)
+    TranscriptReader.ts     tail read JSONL z cache incremental, parse cost/total, readRecentMessages(limit)
+  auto-accept/
+    types.ts                AutoAcceptConfig/Status/StopReason, HaikuResponse, IterationRecord
+    HaikuHeadlessClient.ts  invokeHaiku(), resolveClaudePath(), Windows CVE workaround
+    TriggerDetector.ts      subskrybuje StateWatcher, emit TriggerEvent (working→waiting, debounce 3s)
+    BudgetEnforcer.ts       pure logic: time/iter/cost limity (null = unlimited)
+    CircuitBreaker.ts       sliding window 3 odp.: similarity≥0.80 + idle-length±10%
+    SessionLogger.ts        append-only JSONL, 7 typów eventów, readRecentSessions(20)
+    AutoAcceptSession.ts    orkiestrator z DI, busy-skip, 3× error → stop, restart z dispose
+    startWizard.ts          5-krokowy QuickPick (terminal/time/cost/iter/prompt)
 resources/
   webview/
-    index.html              bar-top (input+send+keystrokes+toggle) + bar-terms (chipy T1-T4) + section.dashboard
-    styles.css              frame/bar layout, chip-term-wide, dashboard/dash-table, last-message, CC pulse animation
-    main.js                 refreshAllItems(), renderDashboard(), applyDashboard(), renderFolders(), setActive()
+    index.html              bar-top + aa-banner + bar-terms (chipy T1-T4) + section.dashboard
+    styles.css              frame/bar layout, chip-term-wide, dashboard, last-message, aa-banner, CC pulse
+    main.js                 applyAutoAccept, startAaClock/stopAaClock, aaHideTimer (auto-hide 5s), renderDashboard
   hooks/
     statusline.js           chain-capable, liczy ctx_pct, zapisuje state.{id}.json
     userpromptsubmit.js     phase=working + transcript_path

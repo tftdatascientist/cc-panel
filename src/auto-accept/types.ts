@@ -52,5 +52,7 @@ export interface AutoAcceptStatus {
   iterationsUsed: number;
   cumulativeCostUsd: number;
   lastError: string | null;
+  /** Ustawione gdy `active===false` i sesja była kiedyś startowana. */
+  stopReason: AutoAcceptStopReason | null;
   config: AutoAcceptConfig | null;
 }

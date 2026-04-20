@@ -29,6 +29,21 @@
       <button id="btn-dash"  class="btn btn-key" type="button" title="Zwiń/rozwiń dashboard">▼</button>
     </div>
 
+    <!-- AUTO-ACCEPT BANNER: widoczny tylko gdy sesja aktywna -->
+    <div id="aa-banner" class="aa-banner" hidden>
+      <span class="aa-banner-dot"></span>
+      <span class="aa-banner-label">AA</span>
+      <span id="aa-banner-term" class="aa-banner-term">T?</span>
+      <span class="aa-banner-sep">·</span>
+      <span id="aa-banner-iter" class="aa-banner-metric">iter —</span>
+      <span class="aa-banner-sep">·</span>
+      <span id="aa-banner-cost" class="aa-banner-metric">$—</span>
+      <span class="aa-banner-sep">·</span>
+      <span id="aa-banner-time" class="aa-banner-metric">time —</span>
+      <span class="aa-banner-spacer"></span>
+      <button id="aa-banner-stop" class="btn btn-key aa-banner-stop" type="button" title="Zatrzymaj Auto-Accept">Stop</button>
+    </div>
+
     <!-- WIERSZ 2: terminal chips z Ctx% -->
     <div class="bar bar-terms">
       <div class="chip-group chip-group-terms" id="grp-term" role="radiogroup" aria-label="Terminal">

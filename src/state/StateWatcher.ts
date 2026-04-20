@@ -85,6 +85,11 @@ export class StateWatcher implements vscode.Disposable {
     return { ...this.snapshots };
   }
 
+  /** Zwraca aktualną ścieżkę transcript JSONL dla terminala albo undefined. */
+  getTranscriptPath(id: TerminalId): string | undefined {
+    return this.transcriptByTerminal.get(id);
+  }
+
   private handleStateChange(p: string): void {
     const id = terminalIdFromStatePath(p);
     if (!id) return;

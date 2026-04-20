@@ -14,53 +14,89 @@
   const dashCells    = Array.from(document.querySelectorAll(".dash-cell"));
   const termChips    = Array.from(document.querySelectorAll(".chip-t"));
   const folderSpans  = Array.from(document.querySelectorAll(".chip-term-folder"));
+  const aaBanner    = document.getElementById("aa-banner");
+  const aaTermEl    = document.getElementById("aa-banner-term");
+  const aaIterEl    = document.getElementById("aa-banner-iter");
+  const aaCostEl    = document.getElementById("aa-banner-cost");
+  const aaTimeEl    = document.getElementById("aa-banner-time");
+  const aaStopBtn   = document.getElementById("aa-banner-stop");
 
   let activeTermId = 1;
   const enabledTerms = new Set([1]);
   let dashboardState = {};
   const unreadTerms = new Set();
   const lastSeenMessageAt = new Map();
+  let aaStatus = null;
+  let aaClockTimer = null;
+  let aaHideTimer = null;
 
   const prevState = vscode.getState && vscode.getState();
   let dashCollapsed = !!(prevState && prevState.dashCollapsed);
   applyDashToggle();
 
-  // Wszystkie komendy w jednej liście: slash commands + user commands + messages
-  let allItems = [];
-
-  function rebuildDatalist() {
-    dataList.innerHTML = "";
-    for (const it of allItems) {
-      const opt = document.createElement("option");
-      opt.value = it.value ?? it.text ?? "";
-      if (it.label && it.label !== opt.value) opt.label = it.label;
-      dataList.appendChild(opt);
-    }
-  }
-
-  function mergeAllItems({ slashItems = [], slashDropdown = [], userItems = [], textItems = [] }) {
-    // Priorytet: własna lista slash (ustawienia.json) > statyczna > user commands > messages
-    const slash = slashDropdown.length ? slashDropdown : slashItems;
-    const merged = [];
-    for (const it of slash)     merged.push(it);
-    for (const it of userItems) merged.push(it);
-    for (const it of textItems) merged.push({ label: it.label, value: it.text });
-    return merged;
-  }
-
-  // Bieżące listy — aktualizowane partiami przez setSlashCommands / setUserLists
+  // Stan list — aktualizowane partiami przez setSlashCommands / setUserLists
   let _slashItems    = [];
   let _slashDropdown = [];
   let _userItems     = [];
   let _textItems     = [];
+  let _history       = [];
+  let _usageStats    = {};
+
+  /**
+   * Buduje datalist z 3 sekcjami, dedup po `value`:
+   *  1) ⏱ Historia — top 20 ostatnio użytych (history[] z UserListsStore, już dedup+cap 100)
+   *  2) ⭐ Najczęstsze — top 10 wg usageStats.count (pomija te już w Historia)
+   *  3) Reszta — slash+user+messages, sortowane po count DESC (stabilne dla równych)
+   * Priorytet deduplikacji: Historia > Najczęstsze > reszta.
+   * `<datalist>` w Chromium/Electron renderuje w kolejności DOM — sekcje zachowują kolejność.
+   */
+  function rebuildDatalist() {
+    dataList.innerHTML = "";
+    const used = new Set();
+
+    const appendOpt = (value, label) => {
+      if (!value || used.has(value)) return;
+      used.add(value);
+      const opt = document.createElement("option");
+      opt.value = value;
+      if (label && label !== value) opt.label = label;
+      dataList.appendChild(opt);
+    };
+
+    // Sekcja 1: Historia (ostatnio wpisane)
+    const histTop = _history.slice(0, 20);
+    for (const value of histTop) {
+      appendOpt(value, `⏱ ${value}`);
+    }
+
+    // Sekcja 2: Najczęstsze (top 10 wg count, pomijając już dodane z history)
+    const statsEntries = Object.entries(_usageStats)
+      .filter(([v]) => !used.has(v))
+      .sort((a, b) => b[1].count - a[1].count || b[1].lastUsedAt - a[1].lastUsedAt)
+      .slice(0, 10);
+    for (const [value, stat] of statsEntries) {
+      appendOpt(value, `⭐ ${value} (${stat.count})`);
+    }
+
+    // Sekcja 3: reszta — slash+user+messages, sort po count DESC
+    const slash = _slashDropdown.length ? _slashDropdown : _slashItems;
+    const rest = [];
+    for (const it of slash)      rest.push({ label: it.label, value: it.value });
+    for (const it of _userItems) rest.push({ label: it.label, value: it.value });
+    for (const it of _textItems) rest.push({ label: it.label, value: it.text });
+
+    rest.sort((a, b) => {
+      const ca = (_usageStats[a.value]?.count) || 0;
+      const cb = (_usageStats[b.value]?.count) || 0;
+      return cb - ca;
+    });
+
+    for (const it of rest) {
+      appendOpt(it.value, it.label);
+    }
+  }
 
   function refreshAllItems() {
-    allItems = mergeAllItems({
-      slashItems:    _slashItems,
-      slashDropdown: _slashDropdown,
-      userItems:     _userItems,
-      textItems:     _textItems,
-    });
     rebuildDatalist();
   }
 
@@ -118,10 +154,14 @@
     }
     for (const chip of termChips) {
       const id = Number(chip.dataset.id);
-      chip.dataset.unread   = unreadTerms.has(id) ? "true" : "false";
+      chip.dataset.unread = unreadTerms.has(id) ? "true" : "false";
       const snap = dashboardState[id];
-      // Wskaźnik pracy: pulsujący dot gdy working
-      chip.dataset.working  = (snap && snap.phase === "working") ? "true" : "false";
+      // Dwa stany fazy — working/waiting — każdy ma osobną, wyraźną sygnalizację.
+      // Brak snap lub inna faza = "idle" (np. zaraz po starcie terminala przed pierwszym hookiem).
+      const phase = snap && (snap.phase === "working" || snap.phase === "waiting") ? snap.phase : "idle";
+      chip.dataset.phase = phase;
+      // Kompat wstecznie — istniejący CSS aa-banner, itp. czyta data-working
+      chip.dataset.working = phase === "working" ? "true" : "false";
       const ctxEl = chip.querySelector(".chip-term-ctx");
       if (ctxEl) ctxEl.textContent = formatMetric(snap, "ctx");
     }
@@ -180,11 +220,123 @@
     renderDashboard();
   }
 
+  // ── Auto-Accept banner ──────────────────────────────────────────────────
+
+  function applyAutoAccept(status) {
+    aaStatus = status;
+    clearAaHideTimer();
+    if (!status) {
+      aaBanner.hidden = true;
+      stopAaClock();
+      return;
+    }
+    const visible = status.active || !!status.lastError;
+    aaBanner.hidden = !visible;
+    if (!visible) {
+      stopAaClock();
+      return;
+    }
+    aaBanner.dataset.state = status.active ? "active" : "stopped";
+    renderAaMetrics();
+    if (status.active && status.timeLimitMs !== null) {
+      startAaClock();
+    } else {
+      stopAaClock();
+      renderAaTime();
+    }
+    if (!status.active) {
+      aaHideTimer = setTimeout(() => {
+        aaBanner.hidden = true;
+        aaHideTimer = null;
+      }, 5000);
+    }
+  }
+
+  function clearAaHideTimer() {
+    if (aaHideTimer) {
+      clearTimeout(aaHideTimer);
+      aaHideTimer = null;
+    }
+  }
+
+  function renderAaMetrics() {
+    if (!aaStatus) return;
+    aaTermEl.textContent = aaStatus.terminalId != null ? `T${aaStatus.terminalId}` : "T?";
+    aaTermEl.className = "aa-banner-term";
+    if (aaStatus.terminalId) aaTermEl.classList.add(`chip-t${aaStatus.terminalId}`);
+
+    const iterLimit = aaStatus.maxIterations;
+    const iterStr = iterLimit === null ? `${aaStatus.iterationsUsed}/∞` : `${aaStatus.iterationsUsed}/${iterLimit}`;
+    aaIterEl.textContent = `iter ${iterStr}`;
+    aaIterEl.classList.toggle("is-limit-near", iterLimit !== null && aaStatus.iterationsUsed >= iterLimit * 0.9);
+
+    const costLimit = aaStatus.costLimitUsd;
+    const costStr = costLimit === null
+      ? `$${aaStatus.cumulativeCostUsd.toFixed(2)}/∞`
+      : `$${aaStatus.cumulativeCostUsd.toFixed(2)}/$${costLimit.toFixed(2)}`;
+    aaCostEl.textContent = costStr;
+    aaCostEl.classList.toggle("is-limit-near", costLimit !== null && aaStatus.cumulativeCostUsd >= costLimit * 0.9);
+
+    renderAaTime();
+  }
+
+  function renderAaTime() {
+    if (!aaStatus) return;
+    if (!aaStatus.active) {
+      aaTimeEl.textContent = aaStatus.lastError ? `stopped: ${truncate(aaStatus.lastError, 40)}` : "stopped";
+      aaTimeEl.classList.remove("is-limit-near");
+      return;
+    }
+    if (aaStatus.timeLimitMs === null || aaStatus.startedAt === null) {
+      aaTimeEl.textContent = "time ∞";
+      aaTimeEl.classList.remove("is-limit-near");
+      return;
+    }
+    const leftMs = (aaStatus.startedAt + aaStatus.timeLimitMs) - Date.now();
+    if (leftMs <= 0) {
+      aaTimeEl.textContent = "time 0s";
+      aaTimeEl.classList.add("is-limit-near");
+      return;
+    }
+    aaTimeEl.textContent = `time ${formatDuration(leftMs)}`;
+    aaTimeEl.classList.toggle("is-limit-near", leftMs < 60_000);
+  }
+
+  function formatDuration(ms) {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rest = s % 60;
+    if (m < 60) return `${m}m${rest.toString().padStart(2, "0")}s`;
+    const h = Math.floor(m / 60);
+    return `${h}h${(m % 60).toString().padStart(2, "0")}m`;
+  }
+
+  function truncate(s, n) {
+    return s.length > n ? s.slice(0, n - 1) + "…" : s;
+  }
+
+  function startAaClock() {
+    if (aaClockTimer) return;
+    aaClockTimer = setInterval(renderAaTime, 1000);
+  }
+  function stopAaClock() {
+    if (aaClockTimer) {
+      clearInterval(aaClockTimer);
+      aaClockTimer = null;
+    }
+  }
+
+  aaStopBtn.addEventListener("click", () => {
+    vscode.postMessage({ type: "stopAutoAccept" });
+  });
+
   // ── Wysyłanie ───────────────────────────────────────────────────────────
 
   function doSend() {
     const text = inputLine.value.trim();
     if (!text) return;
+    // sendRaw w extension.ts sam woła recordCommand — nie duplikujemy postMessage
     vscode.postMessage({ type: "sendRaw", text: text + "\r" });
     inputLine.value = "";
   }
@@ -242,9 +394,12 @@
         _slashDropdown = msg.slashDropdown || [];
         _userItems     = msg.userCommands  || [];
         _textItems     = msg.messages      || [];
+        _history       = msg.history       || [];
+        _usageStats    = msg.usageStats    || {};
         refreshAllItems();
         applyDashboard(msg.dashboard || {});
         renderFolders(msg.projectPaths || ["", "", "", ""]);
+        applyAutoAccept(msg.autoAccept || null);
         break;
       case "setActive":
         setActive(msg.id);
@@ -260,6 +415,8 @@
         _slashDropdown = msg.slashDropdown || [];
         _userItems     = msg.userCommands  || [];
         _textItems     = msg.messages      || [];
+        _history       = msg.history       || _history;
+        _usageStats    = msg.usageStats    || _usageStats;
         refreshAllItems();
         break;
       case "setDashboard":
@@ -267,6 +424,9 @@
         break;
       case "setProjectPaths":
         renderFolders(msg.projectPaths || ["", "", "", ""]);
+        break;
+      case "setAutoAccept":
+        applyAutoAccept(msg.autoAccept || null);
         break;
     }
   });

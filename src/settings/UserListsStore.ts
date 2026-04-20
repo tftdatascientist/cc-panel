@@ -16,11 +16,24 @@ export interface MessageItem {
 /** Folder projektu dla każdego terminala T1-T4 (indeks 0-3). "" = nieustawiony. */
 export type ProjectPaths = [string, string, string, string];
 
+/** Liczniki użycia per value — zasilają sekcję "⭐ Najczęstsze" w dropdownie. */
+export interface UsageStat {
+  count: number;
+  lastUsedAt: number;
+}
+
+/** Limity deduplikacji/cap'a — trzymane tu, żeby łatwo zmienić w jednym miejscu. */
+const HISTORY_CAP = 100;
+
 export interface UserLists {
   slashDropdown: UserCommandItem[];
   userCommands: UserCommandItem[];
   messages: MessageItem[];
   projectPaths: ProjectPaths;
+  /** LRU ostatnio użytych komend (najnowsza na pozycji 0), cap 100, dedup exact-match. */
+  history: string[];
+  /** Licznik użycia per value — ranking dla sortowania dropdownu po częstości. */
+  usageStats: Record<string, UsageStat>;
 }
 
 const EMPTY: UserLists = {
@@ -28,6 +41,8 @@ const EMPTY: UserLists = {
   userCommands: [],
   messages: [],
   projectPaths: ["", "", "", ""],
+  history: [],
+  usageStats: {},
 };
 
 function settingsPath(): string {
@@ -51,6 +66,28 @@ export class UserListsStore implements vscode.Disposable {
     const paths: ProjectPaths = [...this.lists.projectPaths] as ProjectPaths;
     paths[terminalId - 1] = p;
     await this.save({ ...this.lists, projectPaths: paths });
+  }
+
+  /** Odnotuj użycie komendy — aktualizuje history (LRU, dedup, cap 100) i usageStats. */
+  async recordCommand(value: string): Promise<void> {
+    const v = value.trim();
+    if (v.length === 0) return;
+    const now = Date.now();
+
+    const filtered = this.lists.history.filter((h) => h !== v);
+    filtered.unshift(v);
+    const history = filtered.slice(0, HISTORY_CAP);
+
+    const prev = this.lists.usageStats[v];
+    const usageStats = {
+      ...this.lists.usageStats,
+      [v]: {
+        count: (prev?.count ?? 0) + 1,
+        lastUsedAt: now,
+      },
+    };
+
+    await this.save({ ...this.lists, history, usageStats });
   }
 
   async save(next: UserLists): Promise<void> {
@@ -132,5 +169,33 @@ function validate(raw: unknown): UserLists {
   } else if (typeof obj.projectPath === "string" && obj.projectPath.trim().length > 0) {
     out.projectPaths[0] = obj.projectPath.trim();
   }
+
+  // history: backward-compat — gdy brak pola, zostaje []
+  if (Array.isArray(obj.history)) {
+    const seen = new Set<string>();
+    for (const h of obj.history) {
+      if (typeof h !== "string") continue;
+      const v = h.trim();
+      if (v.length === 0 || seen.has(v)) continue;
+      seen.add(v);
+      out.history.push(v);
+      if (out.history.length >= HISTORY_CAP) break;
+    }
+  }
+
+  // usageStats: backward-compat — walidujemy count/lastUsedAt, odrzucamy śmieci
+  if (obj.usageStats && typeof obj.usageStats === "object" && !Array.isArray(obj.usageStats)) {
+    const stats = obj.usageStats as Record<string, unknown>;
+    for (const [key, raw] of Object.entries(stats)) {
+      if (typeof key !== "string" || key.length === 0) continue;
+      if (!raw || typeof raw !== "object") continue;
+      const s = raw as Record<string, unknown>;
+      const count = typeof s.count === "number" && Number.isFinite(s.count) && s.count > 0 ? Math.floor(s.count) : 0;
+      const lastUsedAt = typeof s.lastUsedAt === "number" && Number.isFinite(s.lastUsedAt) ? s.lastUsedAt : 0;
+      if (count === 0) continue;
+      out.usageStats[key] = { count, lastUsedAt };
+    }
+  }
+
   return out;
 }

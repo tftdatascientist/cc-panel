@@ -2,11 +2,13 @@ import * as vscode from "vscode";
 import { TerminalManager } from "./terminals/TerminalManager";
 import { PanelManager } from "./panel/PanelManager";
 import {
+  AutoAcceptStatusDTO,
   DashboardMapDTO,
   KeystrokeName,
   TerminalId,
   isTerminalId,
 } from "./panel/messages";
+import type { AutoAcceptStatus } from "./auto-accept/types";
 
 import { installHooks } from "./hooks/installHooks";
 import { UserListsStore } from "./settings/UserListsStore";
@@ -16,6 +18,12 @@ import {
   runEditUserCommands,
 } from "./settings/editUserLists";
 import { StateWatcher, TerminalDashboardSnapshot } from "./state/StateWatcher";
+import { readRecentMessages } from "./state/TranscriptReader";
+import { AutoAcceptSession } from "./auto-accept/AutoAcceptSession";
+import { TriggerDetector } from "./auto-accept/TriggerDetector";
+import { invokeHaiku } from "./auto-accept/HaikuHeadlessClient";
+import { readRecentSessions } from "./auto-accept/SessionLogger";
+import { runStartWizard } from "./auto-accept/startWizard";
 
 const TERMINAL_IDS: TerminalId[] = [1, 2, 3, 4];
 
@@ -29,6 +37,7 @@ const terminalManager = new TerminalManager();
 let panelManager: PanelManager | undefined;
 let userListsStore: UserListsStore | undefined;
 let stateWatcher: StateWatcher | undefined;
+let autoAcceptSession: AutoAcceptSession | undefined;
 let activeTerminalId: TerminalId = 1;
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -57,6 +66,17 @@ export function activate(context: vscode.ExtensionContext): void {
     },
     onSendRaw: (text) => {
       writeAndWarn(text, text.slice(0, 40));
+      const clean = text.replace(/\r$/, "").trim();
+      if (clean.length > 0) void userListsStore?.recordCommand(clean);
+    },
+    onRecordCommand: (value) => {
+      void userListsStore?.recordCommand(value);
+    },
+    onStopAutoAccept: () => {
+      if (autoAcceptSession?.isActive()) {
+        autoAcceptSession.stop("user-stop");
+        void vscode.window.showInformationMessage("Auto-Accept zatrzymany z panelu.");
+      }
     },
   });
 
@@ -186,14 +206,156 @@ export function activate(context: vscode.ExtensionContext): void {
       );
     })
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ccPanel.startAutoAccept", async () => {
+      await startAutoAccept();
+    }),
+    vscode.commands.registerCommand("ccPanel.stopAutoAccept", () => {
+      if (!autoAcceptSession?.isActive()) {
+        void vscode.window.showInformationMessage("Auto-Accept nie jest aktywny.");
+        return;
+      }
+      autoAcceptSession.stop("user-stop");
+      void vscode.window.showInformationMessage("Auto-Accept zatrzymany.");
+    }),
+    vscode.commands.registerCommand("ccPanel.autoAcceptStatus", () => {
+      showAutoAcceptStatus();
+    }),
+    vscode.commands.registerCommand("ccPanel.showAutoAcceptHistory", async () => {
+      const sessions = readRecentSessions(20);
+      if (sessions.length === 0) {
+        void vscode.window.showInformationMessage("Brak historii Auto-Accept (log pusty).");
+        return;
+      }
+      const items = sessions.map((s) => ({
+        label: `T${s.terminalId} — ${new Date(s.t).toLocaleString()}`,
+        description: `cost: $${s.config.costLimitUsd ?? "∞"} · iter: ${s.config.maxIterations ?? "∞"} · time: ${s.config.timeLimitMs ? `${Math.round(s.config.timeLimitMs / 60000)}min` : "∞"}`,
+        session: s,
+      }));
+      const pick = await vscode.window.showQuickPick(items, {
+        title: `Auto-Accept: historia (${sessions.length} sesji)`,
+        placeHolder: "Wybierz sesję aby zobaczyć sessionId (log: ~/.claude/cc-panel/aa-sessions.jsonl)",
+      });
+      if (pick) {
+        void vscode.window.showInformationMessage(`sessionId: ${pick.session.sessionId}`);
+      }
+    }),
+    vscode.commands.registerCommand("ccPanel.editAutoAcceptSystemPrompt", async () => {
+      const cfg = vscode.workspace.getConfiguration("ccPanel");
+      const current = cfg.get<string>("autoAcceptSystemPrompt") ?? "";
+      const edited = await vscode.window.showInputBox({
+        title: "Auto-Accept: system prompt (persisted in settings)",
+        value: current,
+        prompt: "Zmiana zostanie zapisana w ustawieniach VS Code (ccPanel.autoAcceptSystemPrompt).",
+      });
+      if (edited === undefined) return;
+      await cfg.update("autoAcceptSystemPrompt", edited, vscode.ConfigurationTarget.Global);
+      void vscode.window.showInformationMessage("Auto-Accept system prompt zapisany.");
+    }),
+  );
 }
 
 export function deactivate(): void {
+  autoAcceptSession?.dispose();
+  autoAcceptSession = undefined;
   stateWatcher?.dispose();
   stateWatcher = undefined;
   panelManager?.dispose();
   panelManager = undefined;
   terminalManager.dispose();
+}
+
+async function startAutoAccept(): Promise<void> {
+  if (!stateWatcher) {
+    void vscode.window.showErrorMessage("Auto-Accept: StateWatcher niedostępny.");
+    return;
+  }
+  if (autoAcceptSession?.isActive()) {
+    const pick = await vscode.window.showWarningMessage(
+      "Auto-Accept już działa. Zatrzymać bieżący i wystartować nowy?",
+      "Tak, restart",
+      "Anuluj",
+    );
+    if (pick !== "Tak, restart") return;
+    autoAcceptSession.stop("user-stop");
+    autoAcceptSession.dispose();
+    autoAcceptSession = undefined;
+  }
+
+  const activeIds = terminalManager.activeIds().filter(isTerminalId) as TerminalId[];
+  const cfg = vscode.workspace.getConfiguration("ccPanel");
+  const defaultSystemPrompt = cfg.get<string>("autoAcceptSystemPrompt") ?? "";
+  const defaultMetaPrompt = cfg.get<string>("autoAcceptMetaPrompt") ?? "";
+
+  const config = await runStartWizard({
+    availableTerminals: activeIds,
+    defaultSystemPrompt,
+    defaultMetaPrompt,
+  });
+  if (!config) return;
+
+  const watcher = stateWatcher;
+  const triggerDetector = new TriggerDetector(watcher);
+  autoAcceptSession = new AutoAcceptSession({
+    triggerDetector,
+    haikuClient: { invokeHaiku },
+    writeToTerminal: (id, text) => terminalManager.write(id, text),
+    getRecentMessages: async (id, limit) => {
+      const p = watcher.getTranscriptPath(id);
+      if (!p) return [];
+      try {
+        return await readRecentMessages(p, limit);
+      } catch {
+        return [];
+      }
+    },
+  });
+  autoAcceptSession.onStatus((status) => {
+    panelManager?.setAutoAccept(toAutoAcceptDTO(status));
+    if (!status.active && status.lastError) {
+      void vscode.window.showWarningMessage(`Auto-Accept zatrzymany: ${status.lastError}`);
+    }
+  });
+  autoAcceptSession.start(config);
+  void vscode.window.showInformationMessage(
+    `Auto-Accept start: T${config.terminalId} · time:${fmtTime(config.timeLimitMs)} · cost:${fmtCost(config.costLimitUsd)} · iter:${config.maxIterations ?? "∞"}`,
+  );
+}
+
+function showAutoAcceptStatus(): void {
+  if (!autoAcceptSession || !autoAcceptSession.isActive()) {
+    void vscode.window.showInformationMessage("Auto-Accept nieaktywny.");
+    return;
+  }
+  const s = autoAcceptSession.getStatus();
+  void vscode.window.showInformationMessage(
+    `AA T${s.terminalId}: iter ${s.iterationsUsed}/${s.config?.maxIterations ?? "∞"} · cost $${s.cumulativeCostUsd.toFixed(2)}/${fmtCost(s.config?.costLimitUsd ?? null)}`,
+  );
+}
+
+function fmtTime(ms: number | null): string {
+  if (ms === null) return "∞";
+  return `${Math.round(ms / 60000)}min`;
+}
+
+function fmtCost(usd: number | null): string {
+  if (usd === null) return "∞";
+  return `$${usd.toFixed(2)}`;
+}
+
+function toAutoAcceptDTO(status: AutoAcceptStatus): AutoAcceptStatusDTO {
+  return {
+    active: status.active,
+    terminalId: status.terminalId,
+    startedAt: status.startedAt,
+    iterationsUsed: status.iterationsUsed,
+    maxIterations: status.config?.maxIterations ?? null,
+    cumulativeCostUsd: status.cumulativeCostUsd,
+    costLimitUsd: status.config?.costLimitUsd ?? null,
+    timeLimitMs: status.config?.timeLimitMs ?? null,
+    lastError: status.lastError,
+  };
 }
 
 function toDashboardDTO(
@@ -223,7 +385,9 @@ function pushUserLists(): void {
   panelManager.setUserLists(
     lists.slashDropdown.map((c) => ({ ...c })),
     lists.userCommands.map((c) => ({ ...c })),
-    lists.messages.map((m) => ({ ...m }))
+    lists.messages.map((m) => ({ ...m })),
+    [...lists.history],
+    { ...lists.usageStats }
   );
   panelManager.setProjectPaths([...lists.projectPaths] as [string, string, string, string]);
 }

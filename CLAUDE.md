@@ -1,6 +1,4 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+> **IZOLACJA:** Ten projekt (`cc-panel` — rozszerzenie VS Code) jest w pełni niezależny od `claude-env-manager/`. Jeśli CC załadował CLAUDE.md projektu nadrzędnego (CEM/Python/PySide6) — zignoruj tamten kontekst. Różny stack (TypeScript, node-pty, esbuild), własne repo, własny cykl wydań.
 
 # cc-panel
 
@@ -15,11 +13,9 @@ Rozszerzenie VS Code do równoległej obsługi 1-4 sesji Claude Code z pływają
 2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `STATUS.md`/`ARCHITECTURE.md` na koniec sesji
 3. Numerację sesji w `STATUS.md → Current` inkrementuj przy istotnej zmianie (Done + Next + Current state)
 
-## Auto-Accept Mode (planowane, nie implementować bez potwierdzenia)
+## Auto-Accept Mode (zaimplementowany, sesje 17-22)
 
-Pełny plan w `docs/AUTO_ACCEPT_PLAN.md`: Haiku headless przez `claude -p --output-format json --model haiku`, trigger na krawędzi `working→waiting`, budget enforcer + circuit breaker (Levenshtein > 0.85).
-
-**Status:** `czeka-na-decyzje` (budget domyślny / keybinding / scope cap). **Realny koszt Haiku headless ~$0.07/iter** (cache_creation 58k tokens), NIE ~$0.002 jak wstępnie zakładał plan — zweryfikowane smoke testem 2026-04-20. Urealnić `costLimitUsd` default (5.00 zamiast 1.00) przed implementacją.
+Pipeline: `TriggerDetector` (krawędź working→waiting) → `BudgetEnforcer` (time/iter/cost, każdy `null` = unlimited) → `HaikuHeadlessClient` (`claude -p --output-format json --model haiku`) → `CircuitBreaker` (similarity ≥0.80 + idle-length ±10%) → `writeToTerminal` → `SessionLogger` (JSONL append-only). Default budget: 15 min / $5.00 / 50 iter. **Realny koszt Haiku ~$0.07/iter** (cache_creation 58k tokens, zweryfikowane smoke testem 2026-04-20). Keybinding `Ctrl+Alt+A`. Scope: single-active globalnie (D2). Plan: `docs/AUTO_ACCEPT_PLAN.md`. **E2E (F5) jeszcze nieprzetestowane — nie bumpować VSIX 0.0.4 przed tym.**
 
 ## Commands
 
@@ -52,19 +48,28 @@ Brak test runnera w repo — nie ma `npm test`. Weryfikacja przez `compile-types
 - vanilla HTML/CSS/JS w webview (bez frameworka)
 
 ## Key Files
-- `package.json` — manifest: 12 komend, keybindings (Ctrl+Alt+\`, Ctrl+Alt+1-4, F1-F4 gdy fokus na panelu), 4 `contributes.colors` (ccPanel.terminal.t1-4), 2 configuration properties
-- `src/extension.ts` — activate/deactivate, rejestracja 12 komend, `writeAndWarn()`, `projectPathFor(id)`, forward StateWatcher → PanelManager
-- `src/panel/PanelManager.ts` — `vscode.window.createWebviewPanel(ViewColumn.Beside, preserveFocus)`; routing inbound messages; `broadcastInit`
-- `src/panel/messages.ts` — TS types inbound/outbound (sendRaw, sendKeystroke, selectTerminal, addTerminal, setDashboard, setProjectPaths, setSlashCommands, setUserLists)
+- `package.json` — manifest: **17 komend** (12 core + 5 Auto-Accept), keybindings (Ctrl+Alt+\`, Ctrl+Alt+1-4, F1-F4 gdy fokus na panelu, **Ctrl+Alt+A** dla AA start), 4 `contributes.colors` (ccPanel.terminal.t1-4), **4 configuration properties** (`ccPanel.bypassPermissions`, `ccPanel.autoAcceptSystemPrompt`, `ccPanel.autoAcceptMetaPrompt`, + jedna istniejąca)
+- `src/extension.ts` — activate/deactivate, rejestracja 17 komend, `writeAndWarn()`, `projectPathFor(id)`, forward StateWatcher → PanelManager, `startAutoAccept()` orchestrator, `toAutoAcceptDTO()` mapper
+- `src/panel/PanelManager.ts` — `vscode.window.createWebviewPanel(ViewColumn.Beside, preserveFocus)`; routing inbound messages; `broadcastInit`; `setAutoAccept()` cache+post
+- `src/panel/messages.ts` — TS types inbound/outbound (sendRaw, sendKeystroke, selectTerminal, addTerminal, setDashboard, setProjectPaths, setSlashCommands, setUserLists, **setAutoAccept, stopAutoAccept**); `AutoAcceptStatusDTO`
 - `src/terminals/TerminalManager.ts` — node-pty spawn przez `Pseudoterminal`; lazy spawn z fallback 300ms; `cmd.exe /k` na Windows; env `CC_PANEL_TERMINAL_ID=1..4`; flag `--dangerously-skip-permissions` gdy `ccPanel.bypassPermissions=true`
 - `src/settings/slashCommands.ts` — 35 statycznych slash commands; `/color` jako 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów T1-T4
 - `src/settings/UserListsStore.ts` — R/W `~/.claude/cc-panel/ustawienia.json`: user commands + messages + `projectPaths[T1-T4]`; migracja legacy `projectPath` → slot T1
 - `src/settings/editUserLists.ts` — QuickPick/InputBox wizard (edycja list + ustawienie folderu projektu per slot)
-- `src/state/StateWatcher.ts` — chokidar na `state.*.json` + dynamiczny watcher na transcript JSONL; debounce 150ms; event emitter
-- `src/state/TranscriptReader.ts` — tail read JSONL z cache incremental (tylko przyrost); parse cost/total tokenów z `type:"assistant"`; tabela PRICING per-model; reset przy shrink pliku (nowa sesja)
+- `src/state/StateWatcher.ts` — chokidar na `state.*.json` + dynamiczny watcher na transcript JSONL; debounce 150ms; event emitter; **`getTranscriptPath(id)`** dla AutoAcceptSession
+- `src/state/TranscriptReader.ts` — tail read JSONL z cache incremental (tylko przyrost); parse cost/total tokenów z `type:"assistant"`; tabela PRICING per-model; reset przy shrink pliku (nowa sesja); **`readRecentMessages()` dla kontekstu Haiku**
 - `src/hooks/installHooks.ts` — upsert `~/.claude/settings.json`: `statusLine` + `UserPromptSubmit` + `Stop`
+- **`src/auto-accept/`** — 7 plików pipeline'u:
+  - `types.ts` — `AutoAcceptConfig` (z `null` dla unlimited), `AutoAcceptStopReason`, `AutoAcceptStatus`, `HaikuResponse`
+  - `HaikuHeadlessClient.ts` — `invokeHaiku({prompt,systemPrompt,signal,timeoutMs})`; `resolveClaudePath` PATH scan; Windows CVE-2024-27980 workaround (`shell:true` dla `.cmd/.bat`)
+  - `TriggerDetector.ts` — subskrybuje StateWatcher, emituje `TriggerEvent` na krawędzi working→waiting; debounce 3000ms; single-target
+  - `BudgetEnforcer.ts` — pure logic, time/iter/cost (każdy `null` = skip)
+  - `CircuitBreaker.ts` — sliding window 3 odpowiedzi; similarity Levenshtein ≥0.80 OR idle-length ±10%
+  - `SessionLogger.ts` — append-only JSONL do `~/.claude/cc-panel/aa-sessions.jsonl`; 7 typów eventów discriminated union
+  - `AutoAcceptSession.ts` — orkiestrator z DI; busy-skip; 3× error → stop; restart z dispose
+  - `startWizard.ts` — 5-krokowy QuickPick wizard (terminal / time / cost / iter / prompt)
 - `resources/hooks/` — `statusline.js` (chain-capable, liczy ctx_pct, merge z prev state), `userpromptsubmit.js` (phase=working + transcript_path), `stop.js` (phase=waiting + last_message z JSONL)
-- `resources/webview/` — `index.html` (bar-top input+▶+Esc+^C+▼ / bar-terms chipy T1-T4 / dashboard section), `styles.css`, `main.js`
+- `resources/webview/` — `index.html` (bar-top input+▶+Esc+^C+▼ / **aa-banner** / bar-terms chipy T1-T4 / dashboard section), `styles.css`, `main.js` (z auto-hide timer i local countdown AA)
 
 ## Layout
 

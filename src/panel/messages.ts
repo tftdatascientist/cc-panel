@@ -25,6 +25,28 @@ export interface DashboardSnapshotDTO {
 
 export type DashboardMapDTO = Partial<Record<TerminalId, DashboardSnapshotDTO>>;
 
+/**
+ * Status Auto-Accept dla webview bannera. Null gdy AA nieaktywny (banner ukryty).
+ * `startedAt` i `timeLimitMs` pozwalają webview lokalnie odliczać "time left"
+ * bez potrzeby pushowania statusu co sekundę z extension.
+ */
+export interface AutoAcceptStatusDTO {
+  active: boolean;
+  terminalId: TerminalId | null;
+  startedAt: number | null;
+  iterationsUsed: number;
+  maxIterations: number | null;
+  cumulativeCostUsd: number;
+  costLimitUsd: number | null;
+  timeLimitMs: number | null;
+  lastError: string | null;
+}
+
+export interface UsageStatDTO {
+  count: number;
+  lastUsedAt: number;
+}
+
 export type PanelOutboundMessage =
   | {
       type: "init";
@@ -36,6 +58,9 @@ export type PanelOutboundMessage =
       messages: MessageDropItem[];
       dashboard: DashboardMapDTO;
       projectPaths: [string, string, string, string];
+      autoAccept: AutoAcceptStatusDTO | null;
+      history: string[];
+      usageStats: Record<string, UsageStatDTO>;
     }
   | { type: "setActive"; id: TerminalId }
   | { type: "setTerminals"; terminals: TerminalId[] }
@@ -45,16 +70,21 @@ export type PanelOutboundMessage =
       slashDropdown: DropItem[];
       userCommands: DropItem[];
       messages: MessageDropItem[];
+      history: string[];
+      usageStats: Record<string, UsageStatDTO>;
     }
   | { type: "setDashboard"; dashboard: DashboardMapDTO }
-  | { type: "setProjectPaths"; projectPaths: [string, string, string, string] };
+  | { type: "setProjectPaths"; projectPaths: [string, string, string, string] }
+  | { type: "setAutoAccept"; autoAccept: AutoAcceptStatusDTO | null };
 
 export type PanelInboundMessage =
   | { type: "ready" }
   | { type: "selectTerminal"; id: TerminalId }
   | { type: "addTerminal"; id: TerminalId }
   | { type: "sendKeystroke"; name: KeystrokeName }
-  | { type: "sendRaw"; text: string };
+  | { type: "sendRaw"; text: string }
+  | { type: "stopAutoAccept" }
+  | { type: "recordCommand"; value: string };
 
 export function isTerminalId(n: unknown): n is TerminalId {
   return n === 1 || n === 2 || n === 3 || n === 4;

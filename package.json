@@ -2,7 +2,7 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "publisher": "LokalnaAutomatyzacjaBiznesu",
   "private": true,
   "repository": {
@@ -66,9 +66,34 @@
       {
         "command": "ccPanel.selectTerminal4",
         "title": "CC Panel: Select Terminal 4"
+      },
+      {
+        "command": "ccPanel.startAutoAccept",
+        "title": "CC Panel: Start Auto-Accept"
+      },
+      {
+        "command": "ccPanel.stopAutoAccept",
+        "title": "CC Panel: Stop Auto-Accept"
+      },
+      {
+        "command": "ccPanel.editAutoAcceptSystemPrompt",
+        "title": "CC Panel: Edit Auto-Accept System Prompt"
+      },
+      {
+        "command": "ccPanel.showAutoAcceptHistory",
+        "title": "CC Panel: Show Auto-Accept History"
+      },
+      {
+        "command": "ccPanel.autoAcceptStatus",
+        "title": "CC Panel: Auto-Accept Status"
       }
     ],
     "keybindings": [
+      {
+        "command": "ccPanel.startAutoAccept",
+        "key": "ctrl+alt+a",
+        "mac": "cmd+alt+a"
+      },
       {
         "command": "ccPanel.cycleActive",
         "key": "ctrl+alt+`",
@@ -149,6 +174,16 @@
           "type": "boolean",
           "default": true,
           "description": "Uruchom CC z flagą --dangerously-skip-permissions (brak pytań o uprawnienia narzędzi)."
+        },
+        "ccPanel.autoAcceptSystemPrompt": {
+          "type": "string",
+          "default": "You are an auto-accept assistant for a Claude Code session. You receive the recent conversation and must respond with a short, direct reply that would continue the work productively. Keep it under 200 characters. If the conversation is stuck in a loop or asks a question you cannot answer, respond with 'stop'.",
+          "description": "System prompt dla Haiku w Auto-Accept mode. Sterowanie zachowaniem modelu gdy CC czeka na odpowiedź."
+        },
+        "ccPanel.autoAcceptMetaPrompt": {
+          "type": "string",
+          "default": "Based on the recent conversation above, respond in a way that keeps the work moving forward.",
+          "description": "Meta-prompt dla Haiku — dołączany po kontekście transcriptu przy każdej iteracji AA."
         }
       }
     }

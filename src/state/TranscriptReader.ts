@@ -148,3 +148,106 @@ export function resetCache(path?: string): void {
   if (path) cache.delete(path);
   else cache.clear();
 }
+
+export interface TranscriptMessage {
+  role: "user" | "assistant";
+  text: string;
+  timestamp: string | null;
+}
+
+interface TranscriptLine {
+  type?: string;
+  isSidechain?: boolean;
+  timestamp?: string;
+  message?: {
+    role?: string;
+    content?:
+      | string
+      | Array<{ type?: string; text?: string; tool_use_id?: string }>;
+  };
+}
+
+const TAIL_WINDOW_BYTES = 64 * 1024;
+
+/**
+ * Czyta ostatnie `limit` wiadomości user/assistant z transcript JSONL dla
+ * kontekstu Haiku (Plan Decyzja 3b). Wyłącznie "rozmowa": user bez tool_result
+ * i assistant text blocks — pomija tool_use/tool_result/attachment/system/sidechain.
+ *
+ * Tail-read ostatnich 64KB (zwykle ~5-20 wiadomości) — nie ładuje wielomegabajtowego
+ * transcriptu do pamięci przy każdym triggerze AA.
+ */
+export async function readRecentMessages(
+  path: string,
+  limit = 5,
+): Promise<TranscriptMessage[]> {
+  let stat: fs.Stats;
+  try {
+    stat = await fs.promises.stat(path);
+  } catch {
+    return [];
+  }
+  if (stat.size === 0) return [];
+
+  const start = Math.max(0, stat.size - TAIL_WINDOW_BYTES);
+  const length = stat.size - start;
+  const fd = await fs.promises.open(path, "r");
+  let text: string;
+  try {
+    const buf = Buffer.alloc(length);
+    await fd.read(buf, 0, length, start);
+    text = buf.toString("utf8");
+  } finally {
+    await fd.close();
+  }
+
+  if (start > 0) {
+    const firstNl = text.indexOf("\n");
+    if (firstNl >= 0) text = text.slice(firstNl + 1);
+  }
+
+  const lines = text.split(/\r?\n/);
+  const out: TranscriptMessage[] = [];
+  for (const raw of lines) {
+    if (!raw) continue;
+    let obj: TranscriptLine;
+    try {
+      obj = JSON.parse(raw) as TranscriptLine;
+    } catch {
+      continue;
+    }
+    if (obj.isSidechain) continue;
+    if (obj.type !== "user" && obj.type !== "assistant") continue;
+    const msg = obj.message;
+    if (!msg) continue;
+
+    let extracted: string | null = null;
+    if (obj.type === "user") {
+      if (typeof msg.content === "string") {
+        const trimmed = msg.content.trim();
+        if (trimmed.length > 0) extracted = trimmed;
+      }
+    } else {
+      if (Array.isArray(msg.content)) {
+        const parts: string[] = [];
+        for (const block of msg.content) {
+          if (block?.type === "text" && typeof block.text === "string") {
+            parts.push(block.text);
+          }
+        }
+        const joined = parts.join("\n").trim();
+        if (joined.length > 0) extracted = joined;
+      }
+    }
+
+    if (extracted !== null) {
+      out.push({
+        role: obj.type,
+        text: extracted,
+        timestamp: obj.timestamp ?? null,
+      });
+    }
+  }
+
+  return out.slice(-limit);
+}

@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as crypto from "crypto";
 import {
+  AutoAcceptStatusDTO,
   DashboardMapDTO,
   DropItem,
   KeystrokeName,
@@ -9,6 +10,7 @@ import {
   PanelInboundMessage,
   PanelOutboundMessage,
   TerminalId,
+  UsageStatDTO,
   isTerminalId,
 } from "./messages";
 
@@ -18,6 +20,8 @@ export interface PanelCallbacks {
   onAddTerminal?: (id: TerminalId) => void;
   onSendKeystroke?: (name: KeystrokeName) => void;
   onSendRaw?: (text: string) => void;
+  onStopAutoAccept?: () => void;
+  onRecordCommand?: (value: string) => void;
 }
 
 export const VIEW_ID = "ccPanelView";
@@ -39,6 +43,9 @@ export class PanelManager implements vscode.Disposable {
   private messages: MessageDropItem[] = [];
   private dashboard: DashboardMapDTO = {};
   private projectPaths: [string, string, string, string] = ["", "", "", ""];
+  private autoAccept: AutoAcceptStatusDTO | null = null;
+  private history: string[] = [];
+  private usageStats: Record<string, UsageStatDTO> = {};
 
   constructor(
     private readonly extensionUri: vscode.Uri,
@@ -52,11 +59,19 @@ export class PanelManager implements vscode.Disposable {
     this.post({ type: "setSlashCommands", slashCommands: items });
   }
 
-  setUserLists(slashDropdown: DropItem[], userCommands: DropItem[], messages: MessageDropItem[]): void {
+  setUserLists(
+    slashDropdown: DropItem[],
+    userCommands: DropItem[],
+    messages: MessageDropItem[],
+    history: string[],
+    usageStats: Record<string, UsageStatDTO>
+  ): void {
     this.slashDropdown = slashDropdown;
     this.userCommands = userCommands;
     this.messages = messages;
-    this.post({ type: "setUserLists", slashDropdown, userCommands, messages });
+    this.history = history;
+    this.usageStats = usageStats;
+    this.post({ type: "setUserLists", slashDropdown, userCommands, messages, history, usageStats });
   }
 
   setTerminals(ids: TerminalId[]): void {
@@ -77,6 +92,11 @@ export class PanelManager implements vscode.Disposable {
   setProjectPaths(projectPaths: [string, string, string, string]): void {
     this.projectPaths = projectPaths;
     this.post({ type: "setProjectPaths", projectPaths });
+  }
+
+  setAutoAccept(status: AutoAcceptStatusDTO | null): void {
+    this.autoAccept = status;
+    this.post({ type: "setAutoAccept", autoAccept: status });
   }
 
   /**
@@ -137,6 +157,17 @@ export class PanelManager implements vscode.Disposable {
         }
         return;
       }
+      if (msg.type === "stopAutoAccept") {
+        this.callbacks.onStopAutoAccept?.();
+        return;
+      }
+      if (msg.type === "recordCommand") {
+        const value = (msg as { value?: unknown }).value;
+        if (typeof value === "string" && value.length > 0) {
+          this.callbacks.onRecordCommand?.(value);
+        }
+        return;
+      }
     });
 
     const disposeSub = this.panel.onDidDispose(() => {
@@ -170,6 +201,9 @@ export class PanelManager implements vscode.Disposable {
       messages: this.messages,
       dashboard: this.dashboard,
       projectPaths: this.projectPaths,
+      autoAccept: this.autoAccept,
+      history: this.history,
+      usageStats: this.usageStats,
     });
   }
 
