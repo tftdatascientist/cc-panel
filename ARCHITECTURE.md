@@ -1,5 +1,5 @@
 ## Overview
-Ekstensja VS Code renderuje cienki panel webview (pływający WebviewPanel) + 1-4 terminale CC (dolny dock panel). Każdy terminal spawnowany przez node-pty z unikalnym `CC_PANEL_TERMINAL_ID`. Panel webview to jeden pasek kontrolek — user przeciąga zakładkę do dolnej grupy edytora lub poza VS Code (osobne okno), dzięki czemu Panel + Terminal widoczne jednocześnie.
+Ekstensja VS Code renderuje cienki panel webview (pływający WebviewPanel) + 1-4 terminale CC (dolny dock panel). Każdy terminal to natywny `vscode.Terminal` w `TerminalLocation.Panel`; proces CC startuje przez prefiksowaną komendę shell (`CC_PANEL_TERMINAL_ID=<id> claude`), która wstrzykuje zmienną środowiskową czytaną przez hooki CC. Panel webview to jeden pasek kontrolek — user przeciąga zakładkę do dolnej grupy edytora lub poza VS Code (osobne okno), dzięki czemu Panel + Terminal widoczne jednocześnie.
 
 ## Osadzenie w VS Code (opcja B: floating WebviewPanel)
 - Panel nie ma dedykowanego kontenera w `viewsContainers` — komenda `ccPanel.open` wywołuje `vscode.window.createWebviewPanel(viewType, title, ViewColumn.Beside, {retainContextWhenHidden: true, preserveFocus: true})`.

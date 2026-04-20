@@ -1,7 +1,7 @@
 ## Meta
 - project: cc-panel
-- session: 15
-- updated: 2026-04-19
+- session: 16
+- updated: 2026-04-20
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
 ## Hard Constraints (NIETYKALNE)
@@ -89,16 +89,20 @@
 - ✅ **ARCHITECTURE.md aktualizacja** — usunięte znaczniki `[PLANOWANE]`, poprawione liczby (34 slash commands), zaktualizowany data flow state.json, dodano `TranscriptReader.ts` do Key files.
 - ✅ **STATUS.md aktualizacja** — numer sesji, Current state, Slash commands count.
 
+## Done — Session 16 ✅
+
+- ✅ **Weryfikacja bugu T2-T4 env** — `ls ~/.claude/cc-panel/` pokazuje wszystkie 4 pliki `state.{1-4}.json` z poprawnymi `terminal_id`, różnymi `transcript_path` i świeżymi wpisami (2026-04-20). Hooki odbierają `CC_PANEL_TERMINAL_ID=1..4` we wszystkich slotach. Fix wprowadzony wcześniej w `TerminalManager.ts` (shell-prefix zamiast `createTerminal({env})`) rozwiązał problem — STATUS.md i CLAUDE.md zawierały **stały opis buga który już nie reprodukuje**. Usunięto.
+- ✅ **Aktualizacja dokumentacji** — `CLAUDE.md` sekcja "Known bugs (aktualne)" usunięta; `STATUS.md` sekcja `Known bugs` wyczyszczona; `Next` bez wpisu o fixie T2-T4.
+- ✅ **Commit zaległej dokumentacji** — `CLAUDE.md` (+79/-38) i `ARCHITECTURE.md` (drobna zmiana) z sesji 15 zostały scommitowane razem z aktualizacją sesji 16.
+
 ## Next
 
-- [ ] **Fix bugu T2-T4 env** — `CC_PANEL_TERMINAL_ID` nie dociera do procesu CC w split terminalach (patrz Known bugs)
-- [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku
-- [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji
+- [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL)
+- [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku)
 - [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu
 
 ## Known bugs
-- **T2-T4: `CC_PANEL_TERMINAL_ID` env nie dociera do procesu CC.** Dowód: user zainicjował T2 w sesji 11, ale `~/.claude/cc-panel/state.2.json` nie powstał (hook widzi env="" → `process.exit(0)` bo `!/^[1-4]$/.test("")`). Przyczyna prawdopodobna: `TerminalManager.create()` używa `vscode.window.createTerminal({env, location:{parentTerminal}})` — split terminal może dziedziczyć env parenta zamiast brać nowy `env` z opts. Dla T1 działa bo nie ma parenta (używa `TerminalLocation.Panel`). Fix: wszystkie terminale spawnować jako `TerminalLocation.Panel` (nie split parentTerminal), LUB zmienić strategię na dedykowany shell integration który przekazuje env przez `bash -c "CC_PANEL_TERMINAL_ID=2 claude"`.
+- (brak)
 
 ## Backlog (niżej priorytetowe)
-- [ ] Weryfikacja ręczna — terminale CC startują i render poprawny (regresja sesji 9)
 - [ ] Testy jednostkowe: `tests/state/transcriptReader.test.ts` z fikstur JSONL (incremental cache, reset przy shrink, cost cumulative)
