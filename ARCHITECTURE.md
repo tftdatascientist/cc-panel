@@ -72,7 +72,7 @@ Wszystkie komendy zarejestrowane w `package.json` mają odpowiadający `register
 
 - **UserListsStore** — `~/.claude/cc-panel/ustawienia.json`; user commands + messages + `projectPaths[T1-T4]`. Metoda `saveProjectPath(id, path)` zapisuje konkretny slot. Migracja legacy `projectPath` → slot T1 przy pierwszym odczycie.
 
-- **slashCommands.ts** — 34 statyczne slash commands CC; `/color` jako 5 wariantów (`cyan`/`orange`/`purple`/`pink`/`random`) — nazwy z puli CC CLI, mapowane do kolorystyki T1–T4
+- **slashCommands.ts** — 35 statycznych slash commands CC; `/color` jako 5 wariantów (`cyan`/`orange`/`purple`/`pink`/`random`) — nazwy z puli CC CLI, mapowane do kolorystyki T1–T4
 
 - **hooks/statusline.js** — chain-capable; czyta stdin (payload CC), kalkuluje ctx_pct (token_usage / 200k), merge z poprzednim state (zachowuje phase, last_message), zapisuje `~/.claude/cc-panel/state.{id}.json`; jeśli `chain.json` → forwarduje stdin do usera statusLine
 - **hooks/userpromptsubmit.js** — ustawia `phase=working` + zapisuje `transcript_path` w state.json
@@ -124,7 +124,7 @@ src/
   terminals/
     TerminalManager.ts      lazy spawn z fallback, /k na Windows, spawnDone flag, env CC_PANEL_TERMINAL_ID
   settings/
-    slashCommands.ts        34 slash commands (statyczne; /color jako 5 wariantów: cyan/orange/purple/pink/random — mapowane do kolorów T1-T4)
+    slashCommands.ts        35 slash commands (statyczne; /color jako 5 wariantów: cyan/orange/purple/pink/random — mapowane do kolorów T1-T4)
     UserListsStore.ts       ustawienia.json R/W
     editUserLists.ts        QuickPick wizard
   hooks/

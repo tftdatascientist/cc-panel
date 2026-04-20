@@ -1,11 +1,32 @@
 # Auto-Accept Mode (AA) — plan implementacji
 
-> **Status:** `czeka-na-decyzje` — plan zaprojektowany i zatwierdzony co do głównych wyborów (1b/2a/3b/4a), ale **niezaimplementowany**. Czeka na decyzje o:
-> 1. Budżet domyślny ($1.00 / 15 min / 50 iter — OK czy inne?)
-> 2. Keybinding startu (Ctrl+Alt+A — wolny, czy konflikt?)
-> 3. Scope cap (jedna sesja naraz vs per-terminal)
+> **Status:** `gotowy-do-implementacji` (po decyzjach z 2026-04-20). Patrz sekcja "Zatwierdzone decyzje" niżej.
 >
 > **Pochodzenie:** transkrypt sesji 19-20 kwietnia 2026 (pliki JSONL `31aca16c...`, `425ebced...`, `a30e17e9...` w projekcie `C--Users-S-awek-claude-env-manager-VS-CLAUDE`). Sesja zakończyła się wyczerpaniem kontekstu, plan nie został zapisany ani scommitowany. Ten dokument jest rekonstrukcją z transkryptu z 2026-04-20 00:23:13Z.
+
+## Zatwierdzone decyzje (2026-04-20, Session 17)
+
+| # | Pytanie | Decyzja | Źródło |
+|---|---------|---------|--------|
+| D1 | Keybinding startu AA | **`Ctrl+Alt+A`** ✅ | user 2026-04-20 |
+| D2 | Scope cap w MVP | **single-active globalnie** (1 aktywna sesja AA naraz, nie per-terminal) | user 2026-04-20 |
+| D3 | Budżet domyślny | **15 min / $5.00 / 50 iter** (cost urealniony z $1 → $5 po smoke teście — realny koszt Haiku headless ~$0.07/iter) + **wymagana opcja "bez limitu"** | user 2026-04-20 + smoke test |
+| D4 | Semantyka "bez limitu" (a/b/c) | **PENDING** — do rozstrzygnięcia przed `BudgetEnforcer.ts`. Rekomendacja: **wariant (b)** — time+cost unlimited, iter cap 500 jako backstop przed runaway loop | advisor |
+
+## Smoke test CLI (2026-04-20)
+
+```
+echo "Say hi in 3 words" | claude -p --output-format json --model haiku
+```
+
+Zwraca JSON z polami: `result` (tekst), `total_cost_usd`, `duration_ms`, `usage.input_tokens/output_tokens/cache_creation_input_tokens`, `session_id`, `modelUsage`.
+
+**Kluczowe obserwacje:**
+- `--model haiku` → alias rozwijany do `claude-haiku-4-5-20251001`
+- Każde wywołanie `claude -p` buduje pełny system prompt = **cache_creation ~58k tokens** na iterację
+- Realny koszt: **~$0.0730/iter**, NIE $0.002 jak zakładał plan
+- `duration_ms` ~5000-5500 ms dla krótkiego promptu
+- Pole wyjścia nazywa się `result`, nie `text` — **HaikuHeadlessClient.ts** musi parsować `response.result`
 
 ## Cel funkcji
 
@@ -104,7 +125,7 @@ Podpięte pod `StateWatcher.onChange` — filtruje event tylko dla terminala obj
 
 ## Kolejność implementacji
 
-1. **`HaikuHeadlessClient.ts`** — samodzielnie testowalny: `execFile('claude',['-p','--output-format','json','--model','haiku'])`, stdin = prompt, parse stdout JSON → `{text, cost_usd, duration_ms}`. Timeout 60s, AbortController. **Test ręczny**: wywołać raz, zobaczyć czy CLI odpowiada.
+1. **`HaikuHeadlessClient.ts`** — samodzielnie testowalny: `execFile('claude',['-p','--output-format','json','--model','haiku'])`, stdin = prompt, parse stdout JSON → `{result, total_cost_usd, duration_ms, usage}` (pola potwierdzone smoke testem 2026-04-20; pole z tekstem to `result`, NIE `text`). Timeout 60s, AbortController. **Test ręczny**: wywołać raz, zobaczyć czy CLI odpowiada.
 2. **`SessionLogger.ts`** — `fs.appendFileSync` do JSONL. Prosty, trywialny.
 3. **`TriggerDetector.ts`** — subscribe do StateWatcher, test przez ręczne przełączenie phase w state.json.
 4. **`BudgetEnforcer.ts` + `CircuitBreaker.ts`** — pure logic, unit-testable (jeśli byłyby testy; tu F5 manual).
@@ -131,7 +152,7 @@ Podpięte pod `StateWatcher.onChange` — filtruje event tylko dla terminala obj
     "systemPrompt": "Jesteś asystentem kontynuującym pracę użytkownika. Bądź zwięzły, nie wymyślaj wymagań.",
     "lastConfig": {
       "timeLimitMs": 900000,
-      "costLimitUsd": 1.0,
+      "costLimitUsd": 5.0,
       "maxIterations": 50
     }
   }

@@ -57,7 +57,7 @@ Brak test runnera w repo — nie ma `npm test`. Weryfikacja przez `compile-types
 - `src/panel/PanelManager.ts` — `vscode.window.createWebviewPanel(ViewColumn.Beside, preserveFocus)`; routing inbound messages; `broadcastInit`
 - `src/panel/messages.ts` — TS types inbound/outbound (sendRaw, sendKeystroke, selectTerminal, addTerminal, setDashboard, setProjectPaths, setSlashCommands, setUserLists)
 - `src/terminals/TerminalManager.ts` — node-pty spawn przez `Pseudoterminal`; lazy spawn z fallback 300ms; `cmd.exe /k` na Windows; env `CC_PANEL_TERMINAL_ID=1..4`; flag `--dangerously-skip-permissions` gdy `ccPanel.bypassPermissions=true`
-- `src/settings/slashCommands.ts` — 34 statyczne slash commands; `/color` jako 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów T1-T4
+- `src/settings/slashCommands.ts` — 35 statycznych slash commands; `/color` jako 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów T1-T4
 - `src/settings/UserListsStore.ts` — R/W `~/.claude/cc-panel/ustawienia.json`: user commands + messages + `projectPaths[T1-T4]`; migracja legacy `projectPath` → slot T1
 - `src/settings/editUserLists.ts` — QuickPick/InputBox wizard (edycja list + ustawienie folderu projektu per slot)
 - `src/state/StateWatcher.ts` — chokidar na `state.*.json` + dynamiczny watcher na transcript JSONL; debounce 150ms; event emitter

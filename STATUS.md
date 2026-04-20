@@ -1,6 +1,6 @@
 ## Meta
 - project: cc-panel
-- session: 16
+- session: 17
 - updated: 2026-04-20
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
@@ -36,7 +36,7 @@
 ## Current
 - state: `tsc --noEmit` czysto, bundle ~94 KB. VSIX `cc-panel-0.0.3.vsix` zainstalowany lokalnie (`lokalnaautomatyzacjabiznesu.cc-panel-0.0.3`).
 - publisher: `LokalnaAutomatyzacjaBiznesu`; VSIX 0.0.3 wgrany ręcznie na Marketplace.
-- slash commands: 34 pozycje; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
+- slash commands: 35 pozycji; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
 
 ## Done — Session 11: dashboard w pływającym oknie (wariant X) ✅
 
@@ -95,12 +95,21 @@
 - ✅ **Aktualizacja dokumentacji** — `CLAUDE.md` sekcja "Known bugs (aktualne)" usunięta; `STATUS.md` sekcja `Known bugs` wyczyszczona; `Next` bez wpisu o fixie T2-T4.
 - ✅ **Commit zaległej dokumentacji** — `CLAUDE.md` (+79/-38) i `ARCHITECTURE.md` (drobna zmiana) z sesji 15 zostały scommitowane razem z aktualizacją sesji 16.
 
+## Done — Session 17 ✅
+
+- ✅ **Recovery planu Auto-Accept** — plan stracony przy compaction 2026-04-19 odzyskany z transkryptu JSONL (timestamp 2026-04-20T00:23:13Z), zapisany do `docs/AUTO_ACCEPT_PLAN.md` (158 linii; commit `beca5df`).
+- ✅ **CLAUDE.md refactor** — blockquote → sekcja `## Workflow` (3 numerowane kroki); luźna notka "Planowane" → `## Auto-Accept Mode` z realnym kosztem Haiku; duplikat "Layout i źródło metryk" → pointer do ARCHITECTURE.md (dedup 9 linii). Commit `e41323f`.
+- ✅ **Smoke test `claude -p --output-format json --model haiku`** — kontrakt CLI zgodny z planem (pola `result`, `total_cost_usd`, `duration_ms`, `usage`). **Realny koszt ~$0.0730/iter** (cache_creation 58046 input tokens) — 35× więcej niż zakładał plan ($0.002). `--model haiku` → alias dla `claude-haiku-4-5-20251001`. Przy budżecie $1 → ~14 iter, nie 500.
+- ✅ **Audit dokumentacji (Session 17)** — wykryta i naprawiona rozbieżność: slash commands 34 → 35 w CLAUDE.md, ARCHITECTURE.md (2×), STATUS.md. Realny count `SLASH_COMMANDS` = 35 pozycji w `src/settings/slashCommands.ts`.
+- ✅ **Decyzje usera ws. Auto-Accept** — keybinding `Ctrl+Alt+A` ✅; scope `single-active globalnie` (MVP) ✅; budget domyślny OK **ale wymaga opcji "bez limitu"** (semantyka a/b/c: tylko czas / czas+cost / wszystkie 3 — pending, rekomendacja advisora: wariant b z iter cap 500 jako backstop przed runaway loop).
+
 ## Next
 
-- [ ] **Auto-Accept Mode** — plan gotowy w `docs/AUTO_ACCEPT_PLAN.md` (status `czeka-na-decyzje`: budżet domyślny / keybinding / scope cap). Kolejność implementacji: `HaikuHeadlessClient.ts` → `SessionLogger.ts` → `TriggerDetector.ts` → `BudgetEnforcer.ts`+`CircuitBreaker.ts` → `AutoAcceptSession.ts` → Command Palette → webview banner.
+- [ ] **Auto-Accept MVP — rozpoczęcie implementacji** wg `docs/AUTO_ACCEPT_PLAN.md`. Kolejność: `HaikuHeadlessClient.ts` (execFile + AbortController + timeout 60s) → `SessionLogger.ts` (appendFileSync JSONL) → `TriggerDetector.ts` (per-terminal lastPhase map) → `BudgetEnforcer.ts`+`CircuitBreaker.ts` (Levenshtein > 0.85) → `AutoAcceptSession.ts` (orkiestrator) → Command Palette (5 komend + keybinding Ctrl+Alt+A) → webview banner. **Default `costLimitUsd: 5.00`** (nie 1.00 z planu — urealnione po smoke teście).
+- [ ] **Dopytać: semantyka "bez limitu"** (a/b/c) przed pisaniem `BudgetEnforcer.ts`.
 - [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
-- [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku)
-- [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu
+- [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku).
+- [ ] **PAT dla `vsce publish`** — skonfigurować na dev.azure.com żeby uniknąć ręcznego uploadu.
 
 ## Known bugs
 - (brak)
