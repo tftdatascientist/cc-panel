@@ -2,7 +2,7 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.4",
+  "version": "0.0.9",
   "publisher": "LokalnaAutomatyzacjaBiznesu",
   "private": true,
   "repository": {
@@ -177,13 +177,13 @@
         },
         "ccPanel.autoAcceptSystemPrompt": {
           "type": "string",
-          "default": "You are an auto-accept assistant for a Claude Code session. You receive the recent conversation and must respond with a short, direct reply that would continue the work productively. Keep it under 200 characters. If the conversation is stuck in a loop or asks a question you cannot answer, respond with 'stop'.",
-          "description": "System prompt dla Haiku w Auto-Accept mode. Sterowanie zachowaniem modelu gdy CC czeka na odpowiedź."
+          "default": "You are the USER in an ongoing Claude Code session. Claude Code (the AI assistant) is waiting for your reply. Read the conversation transcript and respond AS THE USER — give a short, direct reply that keeps the work moving (e.g. 'y', 'yes', 'continue', 'ok', a number, or a brief 1-sentence instruction). Never explain, never ask questions back, never describe what you are doing. If the work appears stuck in a loop with no progress, reply with exactly: stop",
+          "description": "System prompt dla subagenta w Auto-Accept mode. Zastępuje domyślny system prompt Claude — ramkuje subagenta jako usera (nie AI asystenta)."
         },
         "ccPanel.autoAcceptMetaPrompt": {
           "type": "string",
-          "default": "Based on the recent conversation above, respond in a way that keeps the work moving forward.",
-          "description": "Meta-prompt dla Haiku — dołączany po kontekście transcriptu przy każdej iteracji AA."
+          "default": "Reply as the user to keep the work moving forward.",
+          "description": "Meta-prompt dołączany po kontekście transcriptu przy każdej iteracji AA."
         }
       }
     }

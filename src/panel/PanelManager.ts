@@ -214,16 +214,17 @@ export class PanelManager implements vscode.Disposable {
   private renderHtml(webview: vscode.Webview): string {
     const resRoot = vscode.Uri.joinPath(this.extensionUri, "resources", "webview");
     const htmlPath = vscode.Uri.joinPath(resRoot, "index.html").fsPath;
-    const stylesUri = webview.asWebviewUri(vscode.Uri.joinPath(resRoot, "styles.css"));
-    const mainUri = webview.asWebviewUri(vscode.Uri.joinPath(resRoot, "main.js"));
+    const cacheBust = Date.now().toString(36);
+    const stylesUri = `${webview.asWebviewUri(vscode.Uri.joinPath(resRoot, "styles.css"))}?v=${cacheBust}`;
+    const mainUri = `${webview.asWebviewUri(vscode.Uri.joinPath(resRoot, "main.js"))}?v=${cacheBust}`;
     const nonce = crypto.randomBytes(16).toString("base64");
 
     let template = fs.readFileSync(htmlPath, "utf8");
     template = template
       .replace(/{{CSP_SOURCE}}/g, webview.cspSource)
       .replace(/{{NONCE}}/g, nonce)
-      .replace(/{{STYLES_URI}}/g, stylesUri.toString())
-      .replace(/{{MAIN_URI}}/g, mainUri.toString());
+      .replace(/{{STYLES_URI}}/g, stylesUri)
+      .replace(/{{MAIN_URI}}/g, mainUri);
     return template;
   }
 }

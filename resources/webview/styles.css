@@ -47,7 +47,7 @@ html, body {
   overflow: hidden;
 }
 .bar-top   { height: 40px; }
-.bar-terms { height: 34px; padding-top: 0; }
+.bar-terms { height: 68px; padding-top: 0; }
 
 /* INPUT */
 .input-line {
@@ -118,7 +118,7 @@ html, body {
   border-color: var(--t-color);
   color: var(--fg);
 }
-.chip-t.is-disabled { opacity: 0.35; }
+/* nieaktywne terminale ukryte (display:none w JS via hidden attr) */
 
 /* CHIP TERMINAL-WIDE */
 .chip-group-terms {
@@ -128,44 +128,87 @@ html, body {
 .chip-term-wide {
   flex: 1 1 0;
   height: 100%;
-  padding: 0 8px;
-  display: flex !important;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
+  padding: 4px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  gap: 3px;
   font-size: 12px;
 }
+.chip-term-wide[hidden] { display: none !important; }
+
+/* Wiersz 1: T# · folder · (timer gdy waiting) */
+.chip-term-row1 {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+/* Wiersz 2: $X.XX · Ntok · Ctx% */
+.chip-term-row2 {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 .chip-term-id {
   font-weight: 700;
+  font-size: 12px;
   color: var(--t-color);
   letter-spacing: 0.03em;
+  flex: 0 0 auto;
 }
 .chip-term-wide.is-active .chip-term-id { color: var(--fg); }
-.chip-term-ctx {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--t-color);
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
-}
-.chip-term-wide.is-active .chip-term-ctx {
-  color: var(--fg);
-}
 
 .chip-term-folder {
   flex: 1 1 auto;
   min-width: 0;
-  text-align: center;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  opacity: 0.8;
 }
 .chip-term-wide.is-active .chip-term-folder { color: color-mix(in srgb, var(--fg) 65%, transparent); }
 .chip-term-folder:empty { display: none; }
+
+/* Licznik oczekiwania — zastępuje folder gdy phase=waiting */
+.chip-wait-timer {
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-color);
+  flex: 0 0 auto;
+}
+.chip-term-wide.is-active .chip-wait-timer { color: var(--fg); }
+
+.chip-term-cost,
+.chip-term-tokens,
+.chip-term-ctx {
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-color);
+  opacity: 0.85;
+}
+.chip-term-wide.is-active .chip-term-cost,
+.chip-term-wide.is-active .chip-term-tokens,
+.chip-term-wide.is-active .chip-term-ctx {
+  color: var(--fg);
+  opacity: 1;
+}
+.chip-term-sep {
+  color: var(--muted);
+  opacity: 0.5;
+  font-size: 9px;
+}
 
 /* ── Wskaźniki fazy (working / waiting) ───────────────────────────────────
    Maksymalnie rozróżnione, żeby user natychmiast widział co robi CC:
@@ -264,8 +307,8 @@ html, body {
 }
 
 /* ═══ AUTO-ACCEPT BANNER ══════════════════════════════════════════════════
-   Cienki pasek (~26px) pod bar-top, widoczny tylko gdy AA aktywny. Żółta
-   ramka + pulsujący dot sygnalizują: "ekstensja wysyła za Ciebie komendy".
+   Cienki pasek (~26px) pod bar-top, widoczny tylko gdy AA aktywny.
+   Kolor bannera = kolor terminala AA (--t-color ustawiane przez klasę chip-t1..4 w JS).
    Stop button → postMessage stopAutoAccept → AutoAcceptSession.stop("user-stop"). */
 .aa-banner {
   flex: 0 0 auto;
@@ -274,9 +317,9 @@ html, body {
   gap: 6px;
   padding: 0 8px;
   height: 26px;
-  background: color-mix(in srgb, #fbbf24 14%, var(--bg));
-  border-top: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
-  border-bottom: 1px solid color-mix(in srgb, #fbbf24 40%, transparent);
+  background: color-mix(in srgb, var(--t-color, var(--accent)) 14%, var(--bg));
+  border-top: 1px solid color-mix(in srgb, var(--t-color, var(--accent)) 40%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--t-color, var(--accent)) 40%, transparent);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--fg);
@@ -290,7 +333,7 @@ html, body {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #fbbf24;
+  background: var(--t-color, var(--accent));
   animation: cc-pulse 1.4s ease-in-out infinite;
 }
 .aa-banner[data-state="stopped"] .aa-banner-dot {
@@ -300,7 +343,7 @@ html, body {
 .aa-banner-label {
   font-weight: 700;
   letter-spacing: 0.06em;
-  color: #fbbf24;
+  color: var(--t-color, var(--accent));
 }
 .aa-banner[data-state="stopped"] .aa-banner-label { color: var(--muted); }
 .aa-banner-term {
@@ -328,78 +371,43 @@ html, body {
   color: var(--fg);
 }
 
-/* ═══ DASHBOARD ═══════════════════════════════════════════════════════════ */
-.dashboard {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 6px 5px 10px;
-  border-top: 1px solid var(--border);
-  min-height: 0;
-  overflow: hidden;
-}
-.frame.dash-collapsed .dashboard { display: none; }
-
-.dash-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 6px 0;
-  font-size: 12px;
-  table-layout: fixed;
-  flex: 0 0 auto;
-  margin: 0 -6px;
-}
-.dash-table td {
-  padding: 4px 8px;
-  text-align: center;
-  border-bottom: 1px solid var(--border);
-  font-variant-numeric: tabular-nums;
-}
-.dash-table tr:last-child td { border-bottom: none; }
-.dash-cell { width: 25%; }
-.dash-cell[data-id="1"] { color: var(--color-t1); }
-.dash-cell[data-id="2"] { color: var(--color-t2); }
-.dash-cell[data-id="3"] { color: var(--color-t3); }
-.dash-cell[data-id="4"] { color: var(--color-t4); }
-
-.dash-cell[data-active="true"] {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--fg);
-  font-weight: 600;
-}
-.dash-cell[data-stale="true"] {
-  color: color-mix(in srgb, var(--fg) 35%, transparent);
-}
-
-/* Last message */
-.last-message-wrap {
-  flex: 1 1 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-height: 0;
-}
-.last-message-hdr {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-size: 11px;
-}
-.last-message-title { color: var(--muted); font-weight: 600; }
-.last-message-meta { color: var(--muted); font-size: 10px; }
-.last-message-body {
-  flex: 1 1 auto;
-  padding: 8px 10px;
-  background: var(--pane-bg);
-  border: 1px solid var(--border);
+/* ═══ CONTEXT MENU (prawy klik na chipie) ════════════════════════════════ */
+.ctx-menu {
+  position: fixed;
+  z-index: 100;
+  background: var(--vscode-menu-background, var(--pane-bg));
+  border: 1px solid var(--vscode-menu-border, var(--border));
   border-radius: 4px;
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  word-wrap: break-word;
-  overflow: auto;
-  min-height: 50px;
-  max-height: 180px;
-  color: var(--fg);
+  padding: 4px 0;
+  min-width: 200px;
+  max-width: 340px;
+  max-height: 320px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  list-style: none;
 }
+.ctx-menu[hidden] { display: none; }
+.ctx-menu li {
+  padding: 5px 14px;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--vscode-menu-foreground, var(--fg));
+}
+.ctx-menu li:hover {
+  background: var(--vscode-menu-selectionBackground, color-mix(in srgb, var(--accent) 30%, var(--bg)));
+  color: var(--vscode-menu-selectionForeground, var(--fg));
+}
+.ctx-menu li.ctx-menu-section {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 14px 3px;
+  cursor: default;
+  pointer-events: none;
+}
+.ctx-menu li.ctx-menu-section:first-child { padding-top: 4px; }

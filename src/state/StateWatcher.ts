@@ -90,6 +90,11 @@ export class StateWatcher implements vscode.Disposable {
     return this.transcriptByTerminal.get(id);
   }
 
+  /** Zwraca ostatnio odczytany snapshot dla terminala (lub undefined gdy brak danych). */
+  getSnapshot(id: TerminalId): TerminalDashboardSnapshot | undefined {
+    return this.snapshots[id];
+  }
+
   private handleStateChange(p: string): void {
     const id = terminalIdFromStatePath(p);
     if (!id) return;

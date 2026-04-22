@@ -64,7 +64,7 @@ Wszystkie komendy zarejestrowane w `package.json` mają odpowiadający `register
 
 - **extension.ts** — entry point; rejestracja **17 komend** (12 core + 5 AA); `writeAndWarn()`; `cycleActiveTerminal()`; `selectTerminal()`; `projectPathFor(id)`; forward `StateWatcher.onChange` → `PanelManager.setDashboard`; `startAutoAccept()` orchestrator; `toAutoAcceptDTO()` mapper; dispose w kolejności `autoAcceptSession → stateWatcher → panelManager → terminalManager`
 
-- **PanelManager** — `vscode.window.createWebviewPanel` z `ViewColumn.Beside + preserveFocus`; `broadcastInit()` przy `ready`; routing wszystkich inbound messages; `setSlashCommands()` postuje do webview gdy panel otwarty; `onDidDispose` → zerowanie `this.panel`
+- **PanelManager** — `vscode.window.createWebviewPanel` z `ViewColumn.Beside + preserveFocus`; `broadcastInit()` przy `ready`; routing wszystkich inbound messages; `setSlashCommands()` postuje do webview gdy panel otwarty; `onDidDispose` → zerowanie `this.panel`. `renderHtml()` dopisuje `?v=<Date.now()>` do URIs `styles.css`/`main.js` — cache-bust przeciw agresywnemu webview cache przy `retainContextWhenHidden:true`
 
 - **TerminalManager** — spawn CC przez `Pseudoterminal` + node-pty:
   - `open(initialDimensions)`: jeśli wymiary znane → spawn natychmiast; jeśli nie → fallback timer 300ms

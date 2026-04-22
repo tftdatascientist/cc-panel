@@ -8,10 +8,6 @@
   const btnSend     = document.getElementById("btn-send");
   const btnEsc      = document.getElementById("btn-esc");
   const btnCtrlC    = document.getElementById("btn-ctrlc");
-  const btnDash     = document.getElementById("btn-dash");
-  const lastMsgBody = document.getElementById("last-msg-body");
-  const lastMsgMeta = document.getElementById("last-msg-meta");
-  const dashCells    = Array.from(document.querySelectorAll(".dash-cell"));
   const termChips    = Array.from(document.querySelectorAll(".chip-t"));
   const folderSpans  = Array.from(document.querySelectorAll(".chip-term-folder"));
   const aaBanner    = document.getElementById("aa-banner");
@@ -20,6 +16,7 @@
   const aaCostEl    = document.getElementById("aa-banner-cost");
   const aaTimeEl    = document.getElementById("aa-banner-time");
   const aaStopBtn   = document.getElementById("aa-banner-stop");
+  const ctxMenu     = document.getElementById("ctx-menu");
 
   let activeTermId = 1;
   const enabledTerms = new Set([1]);
@@ -29,10 +26,9 @@
   let aaStatus = null;
   let aaClockTimer = null;
   let aaHideTimer = null;
-
-  const prevState = vscode.getState && vscode.getState();
-  let dashCollapsed = !!(prevState && prevState.dashCollapsed);
-  applyDashToggle();
+  /** Map<termId, Date> — moment wejścia w fazę waiting (start licznika) */
+  const waitingSince = new Map();
+  let waitTimerInterval = null;
 
   // Stan list — aktualizowane partiami przez setSlashCommands / setUserLists
   let _slashItems    = [];
@@ -120,7 +116,7 @@
     for (const v of s) enabledTerms.add(v);
     for (const c of termChips) {
       const id = Number(c.dataset.id);
-      c.classList.toggle("is-disabled", !s.has(id));
+      c.hidden = !s.has(id);
     }
   }
 
@@ -135,43 +131,65 @@
     renderDashboard();
   }
 
-  // ── Dashboard ───────────────────────────────────────────────────────────
-
-  function applyDashToggle() {
-    frame.classList.toggle("dash-collapsed", dashCollapsed);
-    if (btnDash) btnDash.textContent = dashCollapsed ? "▲" : "▼";
-    if (vscode.setState) vscode.setState({ dashCollapsed });
-  }
+  // ── Dashboard — metryki w chipach ───────────────────────────────────────
 
   function renderDashboard() {
-    for (const cell of dashCells) {
-      const id = Number(cell.dataset.id);
-      const metric = cell.dataset.metric;
-      const snap = dashboardState[id];
-      cell.dataset.active = id === activeTermId ? "true" : "false";
-      cell.dataset.stale = snap && snap.phase === "working" ? "true" : "false";
-      cell.textContent = formatMetric(snap, metric);
-    }
+    let anyWaiting = false;
     for (const chip of termChips) {
       const id = Number(chip.dataset.id);
       chip.dataset.unread = unreadTerms.has(id) ? "true" : "false";
       const snap = dashboardState[id];
-      // Dwa stany fazy — working/waiting — każdy ma osobną, wyraźną sygnalizację.
-      // Brak snap lub inna faza = "idle" (np. zaraz po starcie terminala przed pierwszym hookiem).
       const phase = snap && (snap.phase === "working" || snap.phase === "waiting") ? snap.phase : "idle";
       chip.dataset.phase = phase;
-      // Kompat wstecznie — istniejący CSS aa-banner, itp. czyta data-working
       chip.dataset.working = phase === "working" ? "true" : "false";
-      const ctxEl = chip.querySelector(".chip-term-ctx");
-      if (ctxEl) ctxEl.textContent = formatMetric(snap, "ctx");
+
+      // Synchronizuj waitingSince na podstawie lastMessageAt + fazy.
+      // Guard: ignoruj stale timestampy (starsze niż 2h) — zwykle pochodzą z state.{id}.json
+      // zapisanego w poprzedniej sesji VS Code / przed rebootem maszyny.
+      const STALE_MS = 2 * 60 * 60 * 1000;
+      if (phase === "waiting" && snap && snap.lastMessageAt) {
+        const ts = new Date(snap.lastMessageAt);
+        const fresh = Date.now() - ts.getTime() < STALE_MS;
+        if (fresh) {
+          const prev = waitingSince.get(id);
+          if (!prev || prev.toISOString() !== snap.lastMessageAt) {
+            waitingSince.set(id, ts);
+          }
+          anyWaiting = true;
+        } else {
+          waitingSince.delete(id);
+        }
+      } else if (phase !== "waiting") {
+        waitingSince.delete(id);
+      }
+
+      const timerEl = chip.querySelector(".chip-wait-timer");
+      const folderEl = chip.querySelector(".chip-term-folder");
+      if (folderEl) folderEl.hidden = false;
+      if (phase === "waiting" && waitingSince.has(id)) {
+        if (timerEl) {
+          timerEl.hidden = false;
+          timerEl.textContent = formatWaitTime(Date.now() - waitingSince.get(id).getTime());
+        }
+      } else {
+        if (timerEl) timerEl.hidden = true;
+      }
+
+      // Metryki wiersz 2: cost · tokens · ctx
+      const costEl = chip.querySelector(".chip-term-cost");
+      const tokEl  = chip.querySelector(".chip-term-tokens");
+      const ctxEl  = chip.querySelector(".chip-term-ctx");
+      if (costEl) costEl.textContent = formatMetric(snap, "cost");
+      if (tokEl)  tokEl.textContent  = formatMetric(snap, "total");
+      if (ctxEl)  ctxEl.textContent  = formatMetric(snap, "ctx");
     }
-    const active = dashboardState[activeTermId];
-    if (active && active.lastMessage) {
-      lastMsgBody.textContent = active.lastMessage;
-      lastMsgMeta.textContent = formatMeta(active);
-    } else {
-      lastMsgBody.textContent = "—";
-      lastMsgMeta.textContent = "";
+
+    // Globalny interval: odświeżaj timery co sekundę gdy ktokolwiek czeka
+    if (anyWaiting && !waitTimerInterval) {
+      waitTimerInterval = setInterval(tickWaitTimers, 1000);
+    } else if (!anyWaiting && waitTimerInterval) {
+      clearInterval(waitTimerInterval);
+      waitTimerInterval = null;
     }
   }
 
@@ -195,14 +213,28 @@
     return `${(n / 1_000_000).toFixed(2)}M`;
   }
 
-  function formatMeta(snap) {
-    const parts = [];
-    if (snap.model) parts.push(snap.model.replace(/^claude-/, ""));
-    if (snap.lastMessageAt) {
-      const t = new Date(snap.lastMessageAt);
-      if (!isNaN(t.getTime())) parts.push(t.toLocaleTimeString());
+  function formatWaitTime(ms) {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}s`;
+    const m = Math.floor(s / 60);
+    const rs = s % 60;
+    if (m < 60) return `${m}:${String(rs).padStart(2, "0")}`;
+    const h = Math.floor(m / 60);
+    const rm = m % 60;
+    return `${h}h${String(rm).padStart(2, "0")}m`;
+  }
+
+  function tickWaitTimers() {
+    for (const chip of termChips) {
+      const id = Number(chip.dataset.id);
+      if (chip.dataset.phase !== "waiting") continue;
+      const since = waitingSince.get(id);
+      if (!since) continue;
+      const timerEl = chip.querySelector(".chip-wait-timer");
+      if (timerEl && !timerEl.hidden) {
+        timerEl.textContent = formatWaitTime(Date.now() - since.getTime());
+      }
     }
-    return parts.join(" · ");
   }
 
   function applyDashboard(map) {
@@ -264,6 +296,9 @@
     aaTermEl.textContent = aaStatus.terminalId != null ? `T${aaStatus.terminalId}` : "T?";
     aaTermEl.className = "aa-banner-term";
     if (aaStatus.terminalId) aaTermEl.classList.add(`chip-t${aaStatus.terminalId}`);
+    // --t-color na poziomie bannera → dot, label, ramka dziedziczą kolor terminala AA
+    aaBanner.className = "aa-banner";
+    if (aaStatus.terminalId) aaBanner.classList.add(`chip-t${aaStatus.terminalId}`);
 
     const iterLimit = aaStatus.maxIterations;
     const iterStr = iterLimit === null ? `${aaStatus.iterationsUsed}/∞` : `${aaStatus.iterationsUsed}/${iterLimit}`;
@@ -331,6 +366,94 @@
     vscode.postMessage({ type: "stopAutoAccept" });
   });
 
+  // ── Context menu (prawy klik na chipie) ────────────────────────────────
+
+  function buildCtxMenuItems() {
+    const items = [];
+    // Sekcja 1: Historia
+    const histTop = _history.slice(0, 10);
+    if (histTop.length) {
+      items.push({ section: "Historia" });
+      for (const v of histTop) items.push({ value: v, label: v });
+    }
+    // Sekcja 2: Slash commands
+    const slash = _slashDropdown.length ? _slashDropdown : _slashItems;
+    if (slash.length) {
+      items.push({ section: "Slash commands" });
+      for (const it of slash.slice(0, 20)) items.push({ value: it.value, label: it.label || it.value });
+    }
+    // Sekcja 3: User commands
+    if (_userItems.length) {
+      items.push({ section: "Komendy" });
+      for (const it of _userItems) items.push({ value: it.value, label: it.label || it.value });
+    }
+    // Sekcja 4: Messages
+    if (_textItems.length) {
+      items.push({ section: "Wiadomości" });
+      for (const it of _textItems) items.push({ value: it.text, label: it.label || it.text });
+    }
+    return items;
+  }
+
+  let ctxMenuTargetId = null;
+
+  function openCtxMenu(chipId, x, y) {
+    ctxMenuTargetId = chipId;
+    ctxMenu.innerHTML = "";
+    const items = buildCtxMenuItems();
+    for (const item of items) {
+      const li = document.createElement("li");
+      if (item.section) {
+        li.className = "ctx-menu-section";
+        li.textContent = item.section;
+      } else {
+        li.textContent = item.label;
+        li.title = item.value;
+        li.addEventListener("click", () => {
+          closeCtxMenu();
+          const text = item.value;
+          vscode.postMessage({ type: "sendRaw", text: text + "\r" });
+        });
+      }
+      ctxMenu.appendChild(li);
+    }
+    // Pozycjonuj menu — nie wychodź poza viewport
+    ctxMenu.hidden = false;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const mw = ctxMenu.offsetWidth || 220;
+    const mh = ctxMenu.offsetHeight || 200;
+    ctxMenu.style.left = `${Math.min(x, vw - mw - 4)}px`;
+    ctxMenu.style.top  = `${Math.min(y, vh - mh - 4)}px`;
+  }
+
+  function closeCtxMenu() {
+    ctxMenu.hidden = true;
+    ctxMenuTargetId = null;
+  }
+
+  // Nasłuch contextmenu na wszystkich chipach
+  for (const c of termChips) {
+    c.addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      const id = Number(c.dataset.id);
+      if (!enabledTerms.has(id)) return;
+      // Przełącz aktywny terminal na kliknięty chip
+      vscode.postMessage({ type: "selectTerminal", id });
+      openCtxMenu(id, e.clientX, e.clientY);
+    });
+  }
+
+  // Zamknij menu przy kliknięciu poza nim
+  document.addEventListener("click", (e) => {
+    if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) {
+      closeCtxMenu();
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeCtxMenu();
+  });
+
   // ── Wysyłanie ───────────────────────────────────────────────────────────
 
   function doSend() {
@@ -373,13 +496,6 @@
     inputLine.value = "";
     inputLine.focus();
   });
-
-  if (btnDash) {
-    btnDash.addEventListener("click", () => {
-      dashCollapsed = !dashCollapsed;
-      applyDashToggle();
-    });
-  }
 
   // ── Wiadomości z ekstensji ──────────────────────────────────────────────
 

@@ -24,10 +24,11 @@ export type BudgetDecision = BudgetDecisionOk | BudgetDecisionStop;
 
 export class BudgetEnforcer {
   private iterationsUsed = 0;
-  private cumulativeCostUsd = 0;
 
   constructor(private readonly config: AutoAcceptConfig, private readonly startedAt: number) {}
 
+  /** Sprawdza limity czasu i iteracji. Limit kosztowy sprawdzany osobno w AutoAcceptSession
+   * (na podstawie kosztu CC z TranscriptReader, nie kosztu wywołań Haiku). */
   check(now = Date.now()): BudgetDecision {
     if (this.config.timeLimitMs !== null && now - this.startedAt >= this.config.timeLimitMs) {
       return { ok: false, reason: "time-limit" };
@@ -35,30 +36,20 @@ export class BudgetEnforcer {
     if (this.config.maxIterations !== null && this.iterationsUsed >= this.config.maxIterations) {
       return { ok: false, reason: "iter-limit" };
     }
-    if (this.config.costLimitUsd !== null && this.cumulativeCostUsd >= this.config.costLimitUsd) {
-      return { ok: false, reason: "cost-limit" };
-    }
     return { ok: true };
   }
 
-  recordIteration(costUsd: number): void {
+  recordIteration(): void {
     this.iterationsUsed += 1;
-    if (Number.isFinite(costUsd) && costUsd > 0) {
-      this.cumulativeCostUsd += costUsd;
-    }
   }
 
-  /** Iteracja rozpoczęta ale nieudana (np. Haiku CLI error) — tylko licznik, bez kosztu. */
+  /** Iteracja rozpoczęta ale nieudana (np. Haiku CLI error) — licznik iteracji. */
   recordFailedIteration(): void {
     this.iterationsUsed += 1;
   }
 
   getIterationsUsed(): number {
     return this.iterationsUsed;
-  }
-
-  getCumulativeCostUsd(): number {
-    return this.cumulativeCostUsd;
   }
 
   getTimeLeftMs(now = Date.now()): number | null {

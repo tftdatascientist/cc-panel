@@ -1,10 +1,11 @@
 ## Meta
 - project: cc-panel
-- session: 24
-- updated: 2026-04-20
+- session: 28
+- updated: 2026-04-22
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
 ## Hard Constraints (NIETYKALNE)
+- **Dystrybucja ekstensji — tylko przez Marketplace.** Lokalny `code --install-extension cc-panel-*.vsix --force` tworzy duplikaty w `~/.vscode/extensions/` (każda instalacja zostawia osobny folder, mechanizm `.obsolete` bywa zawodny). Przy kilku aktywnych wersjach dla tego samego publisher ID VS Code rzuca „Cannot read the extension / scanning extensions". Dla iteracji dev — **F5 (Extension Development Host)** ładuje ze source tree i omija cały problem. Dla release — upload VSIX na Marketplace i czekać na propagację.
 - **Statusline CC w terminalu JEST ŚWIĘTY.** User ma ccstatusline (lub podobny) z widokiem `Model | Ctx% | Session% | Session time | Cost | Weekly% | Total`. cc-panel NIGDY nie podmienia tego paska. Opcja "Podmień" z `installHooks` wykluczona — nie proponować. Jeśli funkcja cc-panel wymaga podmiany statusline → rezygnujemy z funkcji, NIE ze statusline. Szukamy danych z innego źródła (transcript JSONL, cache CC). Chain mode teoretycznie OK, ale w praktyce nigdy nie zadziałał — przed proponowaniem wymagana diagnoza bugu.
 
 ## Done — foundations (sesje 0-16)
@@ -23,12 +24,12 @@ Fundament cc-panel ukończony. Szczegóły w `ARCHITECTURE.md` (komponenty, data
 - **Sesja 16** — weryfikacja (przez `ls ~/.claude/cc-panel/state.*.json`) że bug T2-T4 env nie reprodukuje — usunięcie stałych wpisów "Known bugs" w dokumentacji.
 
 ## Current
-- **Build:** `tsc --noEmit` czysto; esbuild bundle **114.5 KB** (production, minified).
-- **VSIX:** `cc-panel-0.0.4.vsix` zbudowany lokalnie (60.86 KB). Oczekuje na ręczny upload na Marketplace (brak PAT).
+- **Build:** `tsc --noEmit` czysto; esbuild bundle **115.2 KB** (production). Zweryfikowane sesja 28 (2026-04-22).
+- **VSIX:** `cc-panel-0.0.9.vsix` opublikowany na Marketplace, zainstalowany pomyślnie przez usera. E2E UI zweryfikowane częściowo: start panelu → tylko T1 widoczny (fix chipów działa).
 - **Publisher:** `LokalnaAutomatyzacjaBiznesu`.
 - **Komendy:** 17 (12 core + 5 AA). Keybindings: `Ctrl+Alt+\`` (cycle), `Ctrl+Alt+1-4` / `F1-F4` (select terminal), `Ctrl+Alt+A` (start AA).
 - **Slash commands:** 35 pozycji; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
-- **Auto-Accept:** Kroki 1-7/7 zaimplementowane + advisor fixes. Pipeline zweryfikowany E2E headless (sesja 23). Plan: `docs/AUTO_ACCEPT_PLAN.md`. Szczegóły: `ARCHITECTURE.md → Auto-Accept`. **E2E przez F5 jeszcze nieprzetestowane.**
+- **Auto-Accept:** Kroki 1-7/7 zaimplementowane + poprawki sesji 26. Pipeline zweryfikowany E2E headless (sesja 23). Plan: `docs/AUTO_ACCEPT_PLAN.md`. Szczegóły: `ARCHITECTURE.md → Auto-Accept`. **E2E przez F5 jeszcze nieprzetestowane.**
 
 ## Done — Auto-Accept (sesje 17-22)
 
@@ -114,11 +115,32 @@ Zrealizowano 3 z 4 planowanych zmian (decyzja usera: pominąć przeniesienie met
 
 - [ ] **Metryki w chipy T1–T4 + usunięcie dashboard-tabelki** — pole `.last-message` **ZOSTAJE**, znika tylko tabelka 4×2. Format w chipie: `$1.02 / 24K / 50%`. Toggle `▼/▲` — do decyzji (zostaje dla ukrywania last-message czy znika?). Dotyka: `index.html` (spans `data-metric="cost"/"total"` w `chip-term-wide`; wyrzucić `.dashboard-grid`), `styles.css` (`chip-term-wide` — 3 metryki + folder w jednym wierszu, min-width >128px), `main.js` (`renderDashboard` — routing metryk do spanów w chipach). Pominięte w sesji 23 na prośbę usera.
 
+### Session 25 ✅ — weryfikacja build (2026-04-20)
+
+- ✅ **`tsc --noEmit`** — czysto, brak błędów typów.
+- ✅ **`npm run build`** — esbuild bundle **251.6 KB** / map 446.2 KB, czas 320ms. Rozmiar zgodny z sesją 23 (node-pty + chokidar bundled).
+
+### Session 28 ✅ — UI fixes: chipy, folder, timer, cache-bust (2026-04-22)
+
+- ✅ **Fix: chipy T2-T4 widoczne mimo nieuruchomionych terminali** — `.chip-term-wide { display: flex !important }` nadpisywał UA-rule `[hidden] { display: none }`. Usunięto `!important`, dodano jawną regułę `.chip-term-wide[hidden] { display: none !important }` (`resources/webview/styles.css`).
+- ✅ **Fix: folder projektu znikał gdy `phase==="waiting"`** — stary kod robił `folderEl.hidden = true` i podstawiał timer. Folder jest priorytetowy (feedback usera). Oba elementy w `chip-term-row1` współistnieją: `T# · folder · timer` (`resources/webview/main.js:renderDashboard`).
+- ✅ **Fix: timer oczekiwania liczył od stale `lastMessageAt`** — `state.{id}.json` trzyma timestamp z poprzedniej sesji CC (przeżywa reboot maszyny). Dodany guard `STALE_MS = 2h`: jeśli `Date.now() - lastMessageAt > 2h`, `waitingSince` nie zostaje ustawiony, timer się nie włącza (`resources/webview/main.js`).
+- ✅ **Cache-bust zasobów webview** — `PanelManager.renderHtml` dopisuje `?v=<timestamp>` do URIs `styles.css`/`main.js`. Fix dla agresywnego webview cache VS Code przy `retainContextWhenHidden:true` — każde `CC Panel: Open` gwarantuje świeże zasoby (`src/panel/PanelManager.ts`).
+- ✅ **Publikacja** — bump `0.0.7 → 0.0.8 → 0.0.9`, `cc-panel-0.0.9.vsix` zbudowany (59.67 KB) i uploadowany ręcznie na Marketplace. **Lessons learned:** instalacja przez `code --install-extension ... --force` produkowała duplikaty w `~/.vscode/extensions/` (5 wersji równolegle → „Cannot read the extension / scanning extensions" error). Remediacja: PS skrypt usuwający foldery + `.obsolete` + `CachedExtensionVSIXs`. Nowa zasada: **dla tej ekstensji Marketplace jest jedynym zdrowym kanałem dystrybucji; lokalny `--install-extension` omijać**.
+
+### Session 26 ✅ — AA fixes: kolor bannera, auto-color, CC cost tracking, system prompt fix (2026-04-21)
+
+- ✅ **AA banner kolor terminala** — `.aa-banner` dostaje klasę `chip-t{id}` w `main.js:renderAaMetrics` → dziedziczy `--t-color` (CSS custom property) z palety terminala AA zamiast hardkodowanego żółtego `#fbbf24`. Zmienione: `styles.css` (`.aa-banner`, `.aa-banner-dot`, `.aa-banner-label` używają `var(--t-color, var(--accent))`), `resources/webview/main.js`.
+- ✅ **Auto-color po spawnie terminala** — `TerminalManager.create()` wysyła `/color cyan|orange|purple|pink` po 1500ms (po 300ms komendy CC). Stała `TERMINAL_COLOR_MAP` mapuje T1-T4 na kolory CC CLI (bez teal/amber/coral — nie istnieją w CC). Zmienione: `src/terminals/TerminalManager.ts`.
+- ✅ **Limit kosztowy AA = koszt sesji CC** — `BudgetEnforcer` usunął tracking kosztu Haiku; `AutoAcceptSession` trzyma `startCostUsd` (baseline ze `StateWatcher.getSnapshot` przy starcie) + oblicza `cumulativeCcCostUsd` jako deltę po każdej iteracji. `StateWatcher` dostał publiczną metodę `getSnapshot(id)`. `AutoAcceptDeps` rozszerzony o `getCcCostUsd(id)`. Zmienione: `BudgetEnforcer.ts`, `AutoAcceptSession.ts`, `StateWatcher.ts`, `extension.ts`.
+- ✅ **Fix systemu promptu AA — ramka roli** — kluczowa naprawa: Haiku wysyłał długie polskie paragrafy zamiast krótkich potwierdzeń (diagnoza z `aa-sessions.jsonl`). Przyczyna: `--append-system-prompt` dołączał instrukcje do domyślnego "You are Claude, an AI assistant" — Haiku myślał że jest asystentem. Poprawki: (1) `HaikuHeadlessClient.ts` zmienił `--append-system-prompt` → `--system` (pełne zastąpienie system promptu); (2) domyślny `autoAcceptSystemPrompt` w `package.json` zmieniony na "You are the USER in an ongoing Claude Code session..." wymuszający krótkie odpowiedzi (y/yes/continue/stop); (3) preambuła w `buildPromptWithContext` zmieniła etykiety `User/Assistant` → `USER/CLAUDE CODE` — wyraźniejszy podział ról w transcripcie.
+- ✅ **Bump 0.0.4 → 0.0.5** — `tsc --noEmit` czysto; `cc-panel-0.0.5.vsix` zbudowany (61.14 KB). Oczekuje na zainstalowanie lokalnie + upload na Marketplace.
+
 ### Pozostałe
 
 - ✅ **E2E headless AA** (2026-04-20) — pipeline zweryfikowany bez F5: fake StateWatcher + realny TriggerDetector → realny HaikuHeadlessClient (claude.cmd) → realny BudgetEnforcer → realny SessionLogger → fake writeToTerminal. Trigger reactionMs ~110ms, 2 iteracje ("ok"/"ok"), auto-stop na `iter-limit`, JSONL kompletny (8 eventów). **Cache hit drugiej iteracji: $0.0067** (vs $0.0787 pierwszej) — realnie po warm-upie ~10× taniej. Webview banner i node-pty spawn nie pokryte (smoke test sesja 22, komponent niezmieniony od 0.0.3).
-- ✅ **Bump version + VSIX 0.0.4** (2026-04-20) — `package.json` 0.0.3→0.0.4, commit `326764a`, `cc-panel-0.0.4.vsix` zbudowany (60.86 KB). Oczekuje na upload na Marketplace.
-- [ ] **Upload na Marketplace** — ręczny upload `cc-panel-0.0.4.vsix`; docelowo PAT na dev.azure.com dla `vsce publish`.
+- ✅ **Bump version + VSIX 0.0.4** (2026-04-20) — `package.json` 0.0.3→0.0.4, commit `326764a`, `cc-panel-0.0.4.vsix` zbudowany (60.86 KB). Zastąpiony przez 0.0.5.
+- [ ] **Upload na Marketplace** — ręczny upload `cc-panel-0.0.5.vsix`; docelowo PAT na dev.azure.com dla `vsce publish`.
 - [ ] **E2E przez F5** — test AA od UI: start wizard → trigger → Haiku response → banner.
 - [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku).

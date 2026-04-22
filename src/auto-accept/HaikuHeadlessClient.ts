@@ -74,7 +74,9 @@ export async function invokeHaiku(opts: HaikuInvokeOptions): Promise<HaikuRespon
 
   const args = ["-p", "--output-format", "json", "--model", "haiku"];
   if (opts.systemPrompt) {
-    args.push("--append-system-prompt", opts.systemPrompt);
+    // --system replaces the default Claude system prompt entirely — required so Haiku
+    // doesn't receive "You are Claude, an AI assistant" framing that overrides role instructions
+    args.push("--system", opts.systemPrompt);
   }
 
   // Windows Node 20+ security hardening (CVE-2024-27980): spawn/execFile odmawia

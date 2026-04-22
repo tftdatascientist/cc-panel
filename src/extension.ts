@@ -310,6 +310,7 @@ async function startAutoAccept(): Promise<void> {
         return [];
       }
     },
+    getCcCostUsd: (id) => watcher.getSnapshot(id)?.costUsd ?? 0,
   });
   autoAcceptSession.onStatus((status) => {
     panelManager?.setAutoAccept(toAutoAcceptDTO(status));

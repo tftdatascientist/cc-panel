@@ -10,7 +10,7 @@
 <body data-active="1">
   <div id="frame" class="frame frame-t1">
 
-    <!-- WIERSZ 1: input + send + keystrokes + toggle dashboard -->
+    <!-- WIERSZ 1: input + send + keystrokes -->
     <div class="bar bar-top">
       <input id="input-text" class="input-line" type="text"
         list="cmd-list"
@@ -23,10 +23,6 @@
 
       <button id="btn-esc"   class="btn btn-key" type="button">Esc</button>
       <button id="btn-ctrlc" class="btn btn-key" type="button">^C</button>
-
-      <div class="sep"></div>
-
-      <button id="btn-dash"  class="btn btn-key" type="button" title="Zwiń/rozwiń dashboard">▼</button>
     </div>
 
     <!-- AUTO-ACCEPT BANNER: widoczny tylko gdy sesja aktywna -->
@@ -44,59 +40,70 @@
       <button id="aa-banner-stop" class="btn btn-key aa-banner-stop" type="button" title="Zatrzymaj Auto-Accept">Stop</button>
     </div>
 
-    <!-- WIERSZ 2: terminal chips z Ctx% -->
+    <!-- WIERSZ 2: terminal chips — tylko aktywne terminale widoczne -->
     <div class="bar bar-terms">
       <div class="chip-group chip-group-terms" id="grp-term" role="radiogroup" aria-label="Terminal">
         <button class="chip chip-t chip-term-wide chip-t1 is-active"  data-id="1" type="button">
-          <span class="chip-term-id">T1</span>
-          <span class="chip-term-folder" data-id="1"></span>
-          <span class="chip-term-ctx" data-metric="ctx">—</span>
+          <div class="chip-term-row1">
+            <span class="chip-term-id">T1</span>
+            <span class="chip-term-folder" data-id="1"></span>
+            <span class="chip-wait-timer" data-id="1" hidden></span>
+          </div>
+          <div class="chip-term-row2">
+            <span class="chip-term-cost" data-metric="cost">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-tokens" data-metric="total">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-ctx" data-metric="ctx">—</span>
+          </div>
         </button>
-        <button class="chip chip-t chip-term-wide chip-t2 is-disabled" data-id="2" type="button">
-          <span class="chip-term-id">T2</span>
-          <span class="chip-term-folder" data-id="2"></span>
-          <span class="chip-term-ctx" data-metric="ctx">—</span>
+        <button class="chip chip-t chip-term-wide chip-t2" data-id="2" type="button" hidden>
+          <div class="chip-term-row1">
+            <span class="chip-term-id">T2</span>
+            <span class="chip-term-folder" data-id="2"></span>
+            <span class="chip-wait-timer" data-id="2" hidden></span>
+          </div>
+          <div class="chip-term-row2">
+            <span class="chip-term-cost" data-metric="cost">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-tokens" data-metric="total">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-ctx" data-metric="ctx">—</span>
+          </div>
         </button>
-        <button class="chip chip-t chip-term-wide chip-t3 is-disabled" data-id="3" type="button">
-          <span class="chip-term-id">T3</span>
-          <span class="chip-term-folder" data-id="3"></span>
-          <span class="chip-term-ctx" data-metric="ctx">—</span>
+        <button class="chip chip-t chip-term-wide chip-t3" data-id="3" type="button" hidden>
+          <div class="chip-term-row1">
+            <span class="chip-term-id">T3</span>
+            <span class="chip-term-folder" data-id="3"></span>
+            <span class="chip-wait-timer" data-id="3" hidden></span>
+          </div>
+          <div class="chip-term-row2">
+            <span class="chip-term-cost" data-metric="cost">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-tokens" data-metric="total">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-ctx" data-metric="ctx">—</span>
+          </div>
         </button>
-        <button class="chip chip-t chip-term-wide chip-t4 is-disabled" data-id="4" type="button">
-          <span class="chip-term-id">T4</span>
-          <span class="chip-term-folder" data-id="4"></span>
-          <span class="chip-term-ctx" data-metric="ctx">—</span>
+        <button class="chip chip-t chip-term-wide chip-t4" data-id="4" type="button" hidden>
+          <div class="chip-term-row1">
+            <span class="chip-term-id">T4</span>
+            <span class="chip-term-folder" data-id="4"></span>
+            <span class="chip-wait-timer" data-id="4" hidden></span>
+          </div>
+          <div class="chip-term-row2">
+            <span class="chip-term-cost" data-metric="cost">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-tokens" data-metric="total">—</span>
+            <span class="chip-term-sep">·</span>
+            <span class="chip-term-ctx" data-metric="ctx">—</span>
+          </div>
         </button>
       </div>
     </div>
 
-    <!-- DASHBOARD: Cost/Total per terminal + last message aktywnego -->
-    <section id="dashboard" class="dashboard">
-      <table class="dash-table" aria-label="Metryki terminali">
-        <tbody>
-          <tr>
-            <td class="dash-cell" data-id="1" data-metric="cost">—</td>
-            <td class="dash-cell" data-id="2" data-metric="cost">—</td>
-            <td class="dash-cell" data-id="3" data-metric="cost">—</td>
-            <td class="dash-cell" data-id="4" data-metric="cost">—</td>
-          </tr>
-          <tr>
-            <td class="dash-cell" data-id="1" data-metric="total">—</td>
-            <td class="dash-cell" data-id="2" data-metric="total">—</td>
-            <td class="dash-cell" data-id="3" data-metric="total">—</td>
-            <td class="dash-cell" data-id="4" data-metric="total">—</td>
-          </tr>
-        </tbody>
-      </table>
-
-      <div class="last-message-wrap">
-        <div class="last-message-hdr">
-          <span class="last-message-title">💬 Ostatnia wiadomość</span>
-          <span class="last-message-meta" id="last-msg-meta"></span>
-        </div>
-        <div class="last-message-body" id="last-msg-body">—</div>
-      </div>
-    </section>
+    <!-- DROPDOWN KONTEKSTOWY (prawy klik na chipie) -->
+    <ul id="ctx-menu" class="ctx-menu" hidden role="menu"></ul>
 
   </div>
 

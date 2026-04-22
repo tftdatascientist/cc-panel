@@ -9,9 +9,9 @@ Rozszerzenie VS Code do równoległej obsługi 1-4 sesji Claude Code z pływają
 
 ## Workflow
 
-1. Przeczytaj `STATUS.md` (bieżąca sesja, Done/Next/Known bugs) i `ARCHITECTURE.md` (layout, data flow, komendy)
-2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `STATUS.md`/`ARCHITECTURE.md` na koniec sesji
-3. Numerację sesji w `STATUS.md → Current` inkrementuj przy istotnej zmianie (Done + Next + Current state)
+1. Przeczytaj `STATUS.md` (Done/Next/Known bugs) i `ARCHITECTURE.md` (layout, data flow, komendy)
+2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `STATUS.md`/`ARCHITECTURE.md`
+3. Zmiany (zaimplementowane i planowane) zapisuj w `CHANGELOG.md` z datą, godziną i wersją
 
 ## Auto-Accept Mode (zaimplementowany, sesje 17-23)
 
@@ -91,4 +91,4 @@ Szczegóły layoutu panelu (bar-top / bar-terms / dashboard) — patrz `ARCHITEC
 - Brak testów jednostkowych — jedyna weryfikacja to `npm run compile-types` (tsc --noEmit) + F5 + ręczny scenariusz
 - Polish w dokumentacji (CLAUDE.md/STATUS.md/ARCHITECTURE.md/komunikaty), English w kodzie/identyfikatorach
 - VSIX-y w root repo (`cc-panel-*.vsix`) — nie commitować nowych wersji bez bumpu w `package.json`
-- Numeracja sesji w `STATUS.md → Current` — inkrementować przy istotnej zmianie (Done + Next + Current state)
+- Zmiany dokumentować w `CHANGELOG.md` — nie tworzyć commitów "podsumowanie sesji"

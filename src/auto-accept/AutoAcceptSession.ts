@@ -50,6 +50,12 @@ export interface AutoAcceptDeps {
    * wysyła Haiku tylko metaPrompt+systemPrompt (MVP-fallback).
    */
   getRecentMessages: (id: TerminalId, limit: number) => Promise<RecentMessage[]>;
+  /**
+   * Zwraca aktualny skumulowany koszt sesji CC (z TranscriptReader) dla danego
+   * terminala. Używane do limitu kosztowego — liczymy koszt CC (Sonnet/Opus),
+   * nie Haiku. Zwraca 0 gdy brak danych.
+   */
+  getCcCostUsd: (id: TerminalId) => number;
 }
 
 const CONSECUTIVE_ERROR_LIMIT = 3;
@@ -73,6 +79,10 @@ export class AutoAcceptSession implements vscode.Disposable {
   private inFlight = false;
   private stopped = false;
   private stopReason: AutoAcceptStopReason | null = null;
+  /** Koszt CC w momencie startu AA — baseline do obliczenia kosztu narosłego w sesji. */
+  private startCostUsd = 0;
+  /** Aktualny koszt CC narosły od startu AA (ostatnio odczytana wartość). */
+  private cumulativeCcCostUsd = 0;
 
   constructor(private readonly deps: AutoAcceptDeps) {}
 
@@ -86,7 +96,7 @@ export class AutoAcceptSession implements vscode.Disposable {
       terminalId: this.config?.terminalId ?? null,
       startedAt: this.startedAt,
       iterationsUsed: this.budget?.getIterationsUsed() ?? 0,
-      cumulativeCostUsd: this.budget?.getCumulativeCostUsd() ?? 0,
+      cumulativeCostUsd: this.cumulativeCcCostUsd,
       lastError: this.lastError,
       stopReason: this.stopReason,
       config: this.config,
@@ -109,6 +119,8 @@ export class AutoAcceptSession implements vscode.Disposable {
     this.consecutiveErrors = 0;
     this.lastError = null;
     this.inFlight = false;
+    this.startCostUsd = this.deps.getCcCostUsd(config.terminalId);
+    this.cumulativeCcCostUsd = 0;
 
     this.logger.logStart(config.terminalId, config);
 
@@ -134,8 +146,7 @@ export class AutoAcceptSession implements vscode.Disposable {
     this.deps.triggerDetector.stop();
 
     const iter = this.budget?.getIterationsUsed() ?? 0;
-    const cost = this.budget?.getCumulativeCostUsd() ?? 0;
-    this.logger?.logStop(reason, iter, cost);
+    this.logger?.logStop(reason, iter, this.cumulativeCcCostUsd);
 
     this.emitStatus();
   }
@@ -160,6 +171,10 @@ export class AutoAcceptSession implements vscode.Disposable {
     const budgetDecision = this.budget.check();
     if (!budgetDecision.ok) {
       this.stop(budgetDecision.reason);
+      return;
+    }
+    if (this.checkCostLimit()) {
+      this.stop("cost-limit");
       return;
     }
 
@@ -218,7 +233,8 @@ export class AutoAcceptSession implements vscode.Disposable {
     if (this.stopped || !response) return;
 
     this.logger.logHaikuResponse(iter, response);
-    this.budget.recordIteration(response.totalCostUsd);
+    this.budget.recordIteration();
+    this.cumulativeCcCostUsd = Math.max(0, this.deps.getCcCostUsd(this.config.terminalId) - this.startCostUsd);
 
     const breakerDecision = this.breaker.analyze(response.result);
     if (breakerDecision.tripped) {
@@ -246,8 +262,17 @@ export class AutoAcceptSession implements vscode.Disposable {
       this.stop(budgetAfter.reason);
       return;
     }
+    if (this.checkCostLimit()) {
+      this.stop("cost-limit");
+      return;
+    }
 
     this.emitStatus();
+  }
+
+  private checkCostLimit(): boolean {
+    if (!this.config || this.config.costLimitUsd === null) return false;
+    return this.cumulativeCcCostUsd >= this.config.costLimitUsd;
   }
 
   private emitStatus(): void {
@@ -266,9 +291,9 @@ export function buildPromptWithContext(
   recent: RecentMessage[],
 ): string {
   if (recent.length === 0) return metaPrompt;
-  const lines: string[] = ["Recent conversation (last messages from Claude Code session):", ""];
+  const lines: string[] = ["Transcript (last messages from this Claude Code session):", ""];
   for (const m of recent) {
-    const label = m.role === "user" ? "User" : "Assistant";
+    const label = m.role === "user" ? "USER" : "CLAUDE CODE";
     const snippet =
       m.text.length > MESSAGE_SNIPPET_MAX_CHARS
         ? m.text.slice(0, MESSAGE_SNIPPET_MAX_CHARS) + "…[truncated]"
