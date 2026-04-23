@@ -22,6 +22,7 @@ export interface PanelCallbacks {
   onSendRaw?: (text: string) => void;
   onStopAutoAccept?: () => void;
   onRecordCommand?: (value: string) => void;
+  onShowContextMenu?: (chipId: TerminalId) => void;
 }
 
 export const VIEW_ID = "ccPanelView";
@@ -166,6 +167,11 @@ export class PanelManager implements vscode.Disposable {
         if (typeof value === "string" && value.length > 0) {
           this.callbacks.onRecordCommand?.(value);
         }
+        return;
+      }
+      if (msg.type === "showContextMenu") {
+        const chipId = (msg as { chipId?: unknown }).chipId;
+        if (isTerminalId(chipId)) this.callbacks.onShowContextMenu?.(chipId);
         return;
       }
     });

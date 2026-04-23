@@ -3,11 +3,6 @@
   const vscode = acquireVsCodeApi();
 
   const frame       = document.getElementById("frame");
-  const inputLine   = document.getElementById("input-text");
-  const dataList    = document.getElementById("cmd-list");
-  const btnSend     = document.getElementById("btn-send");
-  const btnEsc      = document.getElementById("btn-esc");
-  const btnCtrlC    = document.getElementById("btn-ctrlc");
   const termChips    = Array.from(document.querySelectorAll(".chip-t"));
   const folderSpans  = Array.from(document.querySelectorAll(".chip-term-folder"));
   const aaBanner    = document.getElementById("aa-banner");
@@ -16,7 +11,6 @@
   const aaCostEl    = document.getElementById("aa-banner-cost");
   const aaTimeEl    = document.getElementById("aa-banner-time");
   const aaStopBtn   = document.getElementById("aa-banner-stop");
-  const ctxMenu     = document.getElementById("ctx-menu");
 
   let activeTermId = 1;
   const enabledTerms = new Set([1]);
@@ -38,62 +32,8 @@
   let _history       = [];
   let _usageStats    = {};
 
-  /**
-   * Buduje datalist z 3 sekcjami, dedup po `value`:
-   *  1) ⏱ Historia — top 20 ostatnio użytych (history[] z UserListsStore, już dedup+cap 100)
-   *  2) ⭐ Najczęstsze — top 10 wg usageStats.count (pomija te już w Historia)
-   *  3) Reszta — slash+user+messages, sortowane po count DESC (stabilne dla równych)
-   * Priorytet deduplikacji: Historia > Najczęstsze > reszta.
-   * `<datalist>` w Chromium/Electron renderuje w kolejności DOM — sekcje zachowują kolejność.
-   */
-  function rebuildDatalist() {
-    dataList.innerHTML = "";
-    const used = new Set();
-
-    const appendOpt = (value, label) => {
-      if (!value || used.has(value)) return;
-      used.add(value);
-      const opt = document.createElement("option");
-      opt.value = value;
-      if (label && label !== value) opt.label = label;
-      dataList.appendChild(opt);
-    };
-
-    // Sekcja 1: Historia (ostatnio wpisane)
-    const histTop = _history.slice(0, 20);
-    for (const value of histTop) {
-      appendOpt(value, `⏱ ${value}`);
-    }
-
-    // Sekcja 2: Najczęstsze (top 10 wg count, pomijając już dodane z history)
-    const statsEntries = Object.entries(_usageStats)
-      .filter(([v]) => !used.has(v))
-      .sort((a, b) => b[1].count - a[1].count || b[1].lastUsedAt - a[1].lastUsedAt)
-      .slice(0, 10);
-    for (const [value, stat] of statsEntries) {
-      appendOpt(value, `⭐ ${value} (${stat.count})`);
-    }
-
-    // Sekcja 3: reszta — slash+user+messages, sort po count DESC
-    const slash = _slashDropdown.length ? _slashDropdown : _slashItems;
-    const rest = [];
-    for (const it of slash)      rest.push({ label: it.label, value: it.value });
-    for (const it of _userItems) rest.push({ label: it.label, value: it.value });
-    for (const it of _textItems) rest.push({ label: it.label, value: it.text });
-
-    rest.sort((a, b) => {
-      const ca = (_usageStats[a.value]?.count) || 0;
-      const cb = (_usageStats[b.value]?.count) || 0;
-      return cb - ca;
-    });
-
-    for (const it of rest) {
-      appendOpt(it.value, it.label);
-    }
-  }
-
   function refreshAllItems() {
-    rebuildDatalist();
+    // no-op; listy przechowywane dla przyszłego użycia
   }
 
   // ── Foldery projektów ───────────────────────────────────────────────────
@@ -366,71 +306,7 @@
     vscode.postMessage({ type: "stopAutoAccept" });
   });
 
-  // ── Context menu (prawy klik na chipie) ────────────────────────────────
-
-  function buildCtxMenuItems() {
-    const items = [];
-    // Sekcja 1: Historia
-    const histTop = _history.slice(0, 10);
-    if (histTop.length) {
-      items.push({ section: "Historia" });
-      for (const v of histTop) items.push({ value: v, label: v });
-    }
-    // Sekcja 2: Slash commands
-    const slash = _slashDropdown.length ? _slashDropdown : _slashItems;
-    if (slash.length) {
-      items.push({ section: "Slash commands" });
-      for (const it of slash.slice(0, 20)) items.push({ value: it.value, label: it.label || it.value });
-    }
-    // Sekcja 3: User commands
-    if (_userItems.length) {
-      items.push({ section: "Komendy" });
-      for (const it of _userItems) items.push({ value: it.value, label: it.label || it.value });
-    }
-    // Sekcja 4: Messages
-    if (_textItems.length) {
-      items.push({ section: "Wiadomości" });
-      for (const it of _textItems) items.push({ value: it.text, label: it.label || it.text });
-    }
-    return items;
-  }
-
-  let ctxMenuTargetId = null;
-
-  function openCtxMenu(chipId, x, y) {
-    ctxMenuTargetId = chipId;
-    ctxMenu.innerHTML = "";
-    const items = buildCtxMenuItems();
-    for (const item of items) {
-      const li = document.createElement("li");
-      if (item.section) {
-        li.className = "ctx-menu-section";
-        li.textContent = item.section;
-      } else {
-        li.textContent = item.label;
-        li.title = item.value;
-        li.addEventListener("click", () => {
-          closeCtxMenu();
-          const text = item.value;
-          vscode.postMessage({ type: "sendRaw", text: text + "\r" });
-        });
-      }
-      ctxMenu.appendChild(li);
-    }
-    // Pozycjonuj menu — nie wychodź poza viewport
-    ctxMenu.hidden = false;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const mw = ctxMenu.offsetWidth || 220;
-    const mh = ctxMenu.offsetHeight || 200;
-    ctxMenu.style.left = `${Math.min(x, vw - mw - 4)}px`;
-    ctxMenu.style.top  = `${Math.min(y, vh - mh - 4)}px`;
-  }
-
-  function closeCtxMenu() {
-    ctxMenu.hidden = true;
-    ctxMenuTargetId = null;
-  }
+  // ── Context menu (prawy klik na chipie → QuickPick w VS Code) ─────────
 
   // Nasłuch contextmenu na wszystkich chipach
   for (const c of termChips) {
@@ -438,33 +314,12 @@
       e.preventDefault();
       const id = Number(c.dataset.id);
       if (!enabledTerms.has(id)) return;
-      // Przełącz aktywny terminal na kliknięty chip
       vscode.postMessage({ type: "selectTerminal", id });
-      openCtxMenu(id, e.clientX, e.clientY);
+      vscode.postMessage({ type: "showContextMenu", chipId: id });
     });
   }
 
-  // Zamknij menu przy kliknięciu poza nim
-  document.addEventListener("click", (e) => {
-    if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) {
-      closeCtxMenu();
-    }
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeCtxMenu();
-  });
-
-  // ── Wysyłanie ───────────────────────────────────────────────────────────
-
-  function doSend() {
-    const text = inputLine.value.trim();
-    if (!text) return;
-    // sendRaw w extension.ts sam woła recordCommand — nie duplikujemy postMessage
-    vscode.postMessage({ type: "sendRaw", text: text + "\r" });
-    inputLine.value = "";
-  }
-
-  // ── Eventy UI ───────────────────────────────────────────────────────────
+  // ── Eventy UI (chipy terminali) ────────────────────────────────────────
 
   for (const c of termChips) {
     c.addEventListener("click", () => {
@@ -476,26 +331,6 @@
       }
     });
   }
-
-  btnSend.addEventListener("click", doSend);
-
-  inputLine.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      doSend();
-    }
-  });
-
-  btnEsc.addEventListener("click", () => {
-    vscode.postMessage({ type: "sendKeystroke", name: "esc" });
-    inputLine.value = "";
-    inputLine.focus();
-  });
-  btnCtrlC.addEventListener("click", () => {
-    vscode.postMessage({ type: "sendKeystroke", name: "ctrlC" });
-    inputLine.value = "";
-    inputLine.focus();
-  });
 
   // ── Wiadomości z ekstensji ──────────────────────────────────────────────
 
@@ -548,5 +383,4 @@
   });
 
   vscode.postMessage({ type: "ready" });
-  inputLine.focus();
 })();

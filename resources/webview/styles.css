@@ -46,32 +46,7 @@ html, body {
   min-height: 0;
   overflow: hidden;
 }
-.bar-top   { height: 40px; }
-.bar-terms { height: 68px; padding-top: 0; }
-
-/* INPUT */
-.input-line {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0 6px;
-  font-family: var(--vscode-editor-font-family), ui-monospace, monospace;
-  font-size: 12px;
-  color: var(--fg);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  outline: none;
-  height: 100%;
-}
-.input-line:focus { border-color: var(--accent); }
-
-/* SEPARATORY */
-.sep {
-  flex: 0 0 1px;
-  background: var(--border);
-  align-self: stretch;
-  margin: 2px 0;
-}
+.bar-terms { height: 36px; }
 
 /* CHIP GROUP */
 .chip-group {
@@ -107,7 +82,7 @@ html, body {
 }
 
 /* TERMINAL chips */
-.chip-t { font-variant-numeric: tabular-nums; font-size: 13px; position: relative; }
+.chip-t { font-variant-numeric: tabular-nums; font-size: 11px; position: relative; }
 .chip-t1 { --t-color: var(--color-t1); }
 .chip-t2 { --t-color: var(--color-t2); }
 .chip-t3 { --t-color: var(--color-t3); }
@@ -128,38 +103,21 @@ html, body {
 .chip-term-wide {
   flex: 1 1 0;
   height: 100%;
-  padding: 4px 8px;
+  padding: 0 8px;
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: center;
-  gap: 3px;
-  font-size: 12px;
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  min-width: 0;
 }
 .chip-term-wide[hidden] { display: none !important; }
 
-/* Wiersz 1: T# · folder · (timer gdy waiting) */
-.chip-term-row1 {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-
-/* Wiersz 2: $X.XX · Ntok · Ctx% */
-.chip-term-row2 {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  min-width: 0;
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  color: var(--muted);
-}
-
 .chip-term-id {
   font-weight: 700;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--t-color);
   letter-spacing: 0.03em;
   flex: 0 0 auto;
@@ -169,7 +127,7 @@ html, body {
 .chip-term-folder {
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 400;
   color: var(--muted);
   white-space: nowrap;
@@ -179,7 +137,7 @@ html, body {
 .chip-term-wide.is-active .chip-term-folder { color: color-mix(in srgb, var(--fg) 65%, transparent); }
 .chip-term-folder:empty { display: none; }
 
-/* Licznik oczekiwania — zastępuje folder gdy phase=waiting */
+/* Licznik oczekiwania — współistnieje z folderem w jednym wierszu */
 .chip-wait-timer {
   font-size: 11px;
   font-weight: 700;
@@ -192,11 +150,12 @@ html, body {
 .chip-term-cost,
 .chip-term-tokens,
 .chip-term-ctx {
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--t-color);
-  opacity: 0.85;
+  opacity: 0.9;
+  flex: 0 0 auto;
 }
 .chip-term-wide.is-active .chip-term-cost,
 .chip-term-wide.is-active .chip-term-tokens,
@@ -207,7 +166,8 @@ html, body {
 .chip-term-sep {
   color: var(--muted);
   opacity: 0.5;
-  font-size: 9px;
+  font-size: 11px;
+  flex: 0 0 auto;
 }
 
 /* ── Wskaźniki fazy (working / waiting) ───────────────────────────────────
@@ -371,43 +331,3 @@ html, body {
   color: var(--fg);
 }
 
-/* ═══ CONTEXT MENU (prawy klik na chipie) ════════════════════════════════ */
-.ctx-menu {
-  position: fixed;
-  z-index: 100;
-  background: var(--vscode-menu-background, var(--pane-bg));
-  border: 1px solid var(--vscode-menu-border, var(--border));
-  border-radius: 4px;
-  padding: 4px 0;
-  min-width: 200px;
-  max-width: 340px;
-  max-height: 320px;
-  overflow-y: auto;
-  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-  list-style: none;
-}
-.ctx-menu[hidden] { display: none; }
-.ctx-menu li {
-  padding: 5px 14px;
-  font-size: 11px;
-  cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--vscode-menu-foreground, var(--fg));
-}
-.ctx-menu li:hover {
-  background: var(--vscode-menu-selectionBackground, color-mix(in srgb, var(--accent) 30%, var(--bg)));
-  color: var(--vscode-menu-selectionForeground, var(--fg));
-}
-.ctx-menu li.ctx-menu-section {
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-  padding: 8px 14px 3px;
-  cursor: default;
-  pointer-events: none;
-}
-.ctx-menu li.ctx-menu-section:first-child { padding-top: 4px; }

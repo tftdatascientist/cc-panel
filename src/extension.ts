@@ -78,6 +78,9 @@ export function activate(context: vscode.ExtensionContext): void {
         void vscode.window.showInformationMessage("Auto-Accept zatrzymany z panelu.");
       }
     },
+    onShowContextMenu: (chipId) => {
+      void showTerminalQuickPick(chipId);
+    },
   });
 
   context.subscriptions.push(panelManager);
@@ -446,6 +449,53 @@ function selectTerminal(id: TerminalId): void {
   activeTerminalId = id;
   term.show(false);
   panelManager?.setActive(id);
+}
+
+async function showTerminalQuickPick(chipId: TerminalId): Promise<void> {
+  if (!userListsStore) return;
+  const lists = userListsStore.current();
+  const items: vscode.QuickPickItem[] = [];
+
+  if (lists.history.length > 0) {
+    items.push({ label: "Historia", kind: vscode.QuickPickItemKind.Separator });
+    for (const v of lists.history.slice(0, 20)) {
+      items.push({ label: v });
+    }
+  }
+  if (lists.slashDropdown.length > 0 || SLASH_COMMANDS.length > 0) {
+    items.push({ label: "Slash commands", kind: vscode.QuickPickItemKind.Separator });
+    const slash = lists.slashDropdown.length > 0 ? lists.slashDropdown : SLASH_COMMANDS;
+    for (const it of slash.slice(0, 35)) {
+      items.push({ label: it.value, description: it.label !== it.value ? it.label : undefined });
+    }
+  }
+  if (lists.userCommands.length > 0) {
+    items.push({ label: "Komendy", kind: vscode.QuickPickItemKind.Separator });
+    for (const it of lists.userCommands) {
+      items.push({ label: it.value, description: it.label !== it.value ? it.label : undefined });
+    }
+  }
+  if (lists.messages.length > 0) {
+    items.push({ label: "Wiadomości", kind: vscode.QuickPickItemKind.Separator });
+    for (const it of lists.messages) {
+      items.push({ label: it.text, description: it.label !== it.text ? it.label : undefined });
+    }
+  }
+
+  const pick = await vscode.window.showQuickPick(items, {
+    title: `CC Panel: T${chipId}`,
+    placeHolder: "Wybierz komendę lub wiadomość…",
+    matchOnDescription: true,
+  });
+  if (!pick || pick.kind === vscode.QuickPickItemKind.Separator) return;
+
+  const text = pick.label;
+  const ok = terminalManager.write(chipId, text + "\r");
+  if (!ok) {
+    void vscode.window.showWarningMessage(`CC Panel: terminal T${chipId} nieaktywny.`);
+    return;
+  }
+  void userListsStore?.recordCommand(text);
 }
 
 function cycleActiveTerminal(): void {

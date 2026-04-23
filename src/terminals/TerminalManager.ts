@@ -58,6 +58,19 @@ export class TerminalManager implements vscode.Disposable {
     const shellCommand = buildShellCommand(id, fullCommand);
     console.log(`[cc-panel] createTerminal(id=${id}) shell=${vscode.env.shell} cmd=${shellCommand} cwd=${cwd}`);
 
+    // Usuń stary state.{id}.json PRZED spawnem. Dwa powody:
+    //  1) polling poniżej (`fs.existsSync(statePath)`) wykryłby plik z poprzedniej sesji
+    //     i wysłał /color ZANIM CC wystartuje — komenda wpadłaby do buforu cmd.exe.
+    //  2) StateWatcher (chokidar) emituje `unlink` → czyści snapshot + resetCache(transcript),
+    //     więc webview dostaje czysty dashboard dla tego terminala zamiast stare metryki.
+    const statePath = path.join(STATE_DIR, `state.${id}.json`);
+    try {
+      fs.unlinkSync(statePath);
+      console.log(`[cc-panel] createTerminal(id=${id}) usunięto stary state: ${statePath}`);
+    } catch {
+      // plik nie istniał — OK, pierwszy spawn
+    }
+
     const terminal = vscode.window.createTerminal({
       name: `CC #${id}`,
       cwd,
@@ -73,7 +86,6 @@ export class TerminalManager implements vscode.Disposable {
     // Polling co 500ms na pojawienie się pliku; fallback po 15s jeśli hook nie wystrzelił.
     const colorCmd = TERMINAL_COLOR_MAP[id as keyof typeof TERMINAL_COLOR_MAP];
     if (colorCmd) {
-      const statePath = path.join(STATE_DIR, `state.${id}.json`);
       let sent = false;
       const sendColor = () => {
         if (sent) return;

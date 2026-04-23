@@ -4,6 +4,24 @@ Format: `[wersja] YYYY-MM-DD HH:MM` · status: `implemented` | `planned` | `rele
 
 ---
 
+## [0.0.10] — zbudowany, oczekuje na upload (sesja 29, 2026-04-23)
+
+### Implemented
+
+| Czas | Zmiana | Pliki |
+|------|--------|-------|
+| 2026-04-23 | **Spłaszczenie chipów do jednego wiersza** — `.chip-term-wide` zmienione z `flex-direction:column` na `row`; wszystkie elementy (`T# · folder · timer · $X · Ntok · Ctx%`) w jednym wierszu; `bar-terms` zmniejszone z 80px do 36px; `chip-term-row1`/`chip-term-row2` usunięte z HTML; font-size ujednolicony do 11px (był miks 10/11/12/13px); folder `flex:1 1 auto` absorbuje wolne miejsce, metryki `flex:0 0 auto` nie są wypychane | `resources/webview/index.html`, `resources/webview/styles.css` |
+| 2026-04-23 | **Context menu → VS Code QuickPick** — prawy klik na chipie wysyła `postMessage({type:"showContextMenu",chipId})` do extension zamiast otwierać HTML menu w iframe; extension otwiera natywny `vscode.window.showQuickPick` z sekcjami (Historia / Slash commands / Komendy / Wiadomości) przez `QuickPickItemKind.Separator`; wybrana pozycja wysyłana do terminala + `recordCommand`; cały blok HTML/CSS/JS `ctx-menu` usunięty (~70 linii) | `resources/webview/main.js`, `resources/webview/index.html`, `resources/webview/styles.css`, `src/panel/messages.ts`, `src/panel/PanelManager.ts`, `src/extension.ts` |
+
+### Status
+- `tsc --noEmit` — czysto
+- `npm run build` — esbuild bundle OK (255.8 KB)
+- `cc-panel-0.0.10.vsix` — zbudowany (59.56 KB, 2026-04-23)
+- Marketplace — **oczekuje na upload**
+- git commit — **brak** (uncommitted)
+
+---
+
 ## [0.0.9] — opublikowany na Marketplace (sesja 28, 2026-04-22)
 
 ### Implemented

@@ -84,7 +84,8 @@ export type PanelInboundMessage =
   | { type: "sendKeystroke"; name: KeystrokeName }
   | { type: "sendRaw"; text: string }
   | { type: "stopAutoAccept" }
-  | { type: "recordCommand"; value: string };
+  | { type: "recordCommand"; value: string }
+  | { type: "showContextMenu"; chipId: TerminalId };
 
 export function isTerminalId(n: unknown): n is TerminalId {
   return n === 1 || n === 2 || n === 3 || n === 4;

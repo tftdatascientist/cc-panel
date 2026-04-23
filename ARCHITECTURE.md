@@ -10,13 +10,14 @@ Ekstensja VS Code renderuje cienki panel webview (pływający WebviewPanel) + 1-
 ## Panel layout (dwa wiersze)
 ```
 [input (flex)][▶] │ [Esc][^C] │ [▼]      ← bar-top ~40px
-[T1][T2][T3][T4] (każdy: id | folder | Ctx%)  ← bar-terms ~34px
+[T1][T2][T3][T4]                           ← bar-terms ~36px
 ```
-- **input** — `<input type="text" list="cmd-list">`; Enter lub ▶ wysyła tekst do aktywnego terminala. `<datalist>` zawiera scaloną listę: slash commands (statyczne lub z `ustawienia.json`) + user commands + messages.
-- **terminal chipy T1–T4** — kolorowane (teal/amber/purple/coral w CSS, ikony w VS Code przez `contributes.colors`); każdy chip zawiera: ID, basename folderu projektu (max 14 znaków), Ctx%; aktywny podświetlony tłem koloru; disabled (szary) → klik = addTerminal; pulsujący dot gdy `phase=working`; badge dot gdy nowa wiadomość od nieaktywnego.
+Każdy chip (jednopoziomowy, `flex-direction:row`): `T# · folder · timer · $X · Ntok · Ctx%`
+
+- **terminal chipy T1–T4** — kolorowane (teal/amber/purple/coral w CSS, ikony w VS Code przez `contributes.colors`); folder `flex:1 1 auto` (elipsa gdy brak miejsca), metryki `flex:0 0 auto`; aktywny podświetlony tłem koloru; niewidoczny gdy terminal nieuruchomiony (`hidden` attr); pulsujący glow gdy `phase=working`; statyczny outline gdy `phase=waiting`; badge dot gdy nowa wiadomość od nieaktywnego.
+- **Prawy klik na chipie** → `postMessage({type:"showContextMenu",chipId})` → extension otwiera `vscode.window.showQuickPick` z sekcjami Historia / Slash commands / Komendy / Wiadomości (`QuickPickItemKind.Separator`); wybrana pozycja wysyłana do terminala + `recordCommand`.
 - **Esc/^C** — surowe keystrokes (`\u001b`, `\u0003`) do aktywnego terminala.
 - **▼/▲** — toggle dashboardu (persistencja w `vscode.getState()/setState()`).
-
 ## Dashboard (zaimplementowany, sesja 11)
 Pod paskiem kontrolnym — rozwijaný przyciskiem `▼/▲` (stan persistowany w `vscode.getState()/setState()`):
 ```

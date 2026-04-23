@@ -1,7 +1,7 @@
 ## Meta
 - project: cc-panel
-- session: 28
-- updated: 2026-04-22
+- session: 29
+- updated: 2026-04-23
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
 ## Hard Constraints (NIETYKALNE)
@@ -24,8 +24,8 @@ Fundament cc-panel ukończony. Szczegóły w `ARCHITECTURE.md` (komponenty, data
 - **Sesja 16** — weryfikacja (przez `ls ~/.claude/cc-panel/state.*.json`) że bug T2-T4 env nie reprodukuje — usunięcie stałych wpisów "Known bugs" w dokumentacji.
 
 ## Current
-- **Build:** `tsc --noEmit` czysto; esbuild bundle **115.2 KB** (production). Zweryfikowane sesja 28 (2026-04-22).
-- **VSIX:** `cc-panel-0.0.9.vsix` opublikowany na Marketplace, zainstalowany pomyślnie przez usera. E2E UI zweryfikowane częściowo: start panelu → tylko T1 widoczny (fix chipów działa).
+- **Build:** `tsc --noEmit` czysto; esbuild bundle **255.8 KB** (dev) / **115.3 KB** (production). Zweryfikowane sesja 29 (2026-04-23).
+- **VSIX:** `cc-panel-0.0.10.vsix` zbudowany (59.56 KB), oczekuje na upload na Marketplace.
 - **Publisher:** `LokalnaAutomatyzacjaBiznesu`.
 - **Komendy:** 17 (12 core + 5 AA). Keybindings: `Ctrl+Alt+\`` (cycle), `Ctrl+Alt+1-4` / `F1-F4` (select terminal), `Ctrl+Alt+A` (start AA).
 - **Slash commands:** 35 pozycji; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
@@ -136,11 +136,17 @@ Zrealizowano 3 z 4 planowanych zmian (decyzja usera: pominąć przeniesienie met
 - ✅ **Fix systemu promptu AA — ramka roli** — kluczowa naprawa: Haiku wysyłał długie polskie paragrafy zamiast krótkich potwierdzeń (diagnoza z `aa-sessions.jsonl`). Przyczyna: `--append-system-prompt` dołączał instrukcje do domyślnego "You are Claude, an AI assistant" — Haiku myślał że jest asystentem. Poprawki: (1) `HaikuHeadlessClient.ts` zmienił `--append-system-prompt` → `--system` (pełne zastąpienie system promptu); (2) domyślny `autoAcceptSystemPrompt` w `package.json` zmieniony na "You are the USER in an ongoing Claude Code session..." wymuszający krótkie odpowiedzi (y/yes/continue/stop); (3) preambuła w `buildPromptWithContext` zmieniła etykiety `User/Assistant` → `USER/CLAUDE CODE` — wyraźniejszy podział ról w transcripcie.
 - ✅ **Bump 0.0.4 → 0.0.5** — `tsc --noEmit` czysto; `cc-panel-0.0.5.vsix` zbudowany (61.14 KB). Oczekuje na zainstalowanie lokalnie + upload na Marketplace.
 
+### Session 29 ✅ — UI: jednopoziomowe chipy, QuickPick context menu (2026-04-23)
+
+- ✅ **Spłaszczenie chipów do jednego wiersza** — `flex-direction:column → row` na `.chip-term-wide`; układ w chipie: `T# · folder · timer · $X · Ntok · Ctx%`; `bar-terms` zmniejszone z 80px → 36px (oszczędność ~44px wysokości panelu); `chip-term-row1`/`chip-term-row2` usunięte z HTML; font-size ujednolicony do 11px (był miks 10/11/12/13px); folder `flex:1 1 auto` absorbuje nadmiar miejsca. Pliki: `index.html`, `styles.css`.
+- ✅ **Context menu → VS Code QuickPick** — prawy klik na chipie → `postMessage({type:"showContextMenu",chipId})` → extension otwiera `vscode.window.showQuickPick` z sekcjami Historia/Slash commands/Komendy/Wiadomości (`QuickPickItemKind.Separator`); wybór trafia do terminala + `recordCommand`. Cały HTML/CSS/JS blok `ctx-menu` usunięty (~70 linii). Pliki: `main.js`, `index.html`, `styles.css`, `messages.ts`, `PanelManager.ts`, `extension.ts`.
+- ✅ **Bump → 0.0.10 + VSIX** — `tsc --noEmit` czysto; `cc-panel-0.0.10.vsix` zbudowany (59.56 KB). Oczekuje na upload na Marketplace.
+
 ### Pozostałe
 
 - ✅ **E2E headless AA** (2026-04-20) — pipeline zweryfikowany bez F5: fake StateWatcher + realny TriggerDetector → realny HaikuHeadlessClient (claude.cmd) → realny BudgetEnforcer → realny SessionLogger → fake writeToTerminal. Trigger reactionMs ~110ms, 2 iteracje ("ok"/"ok"), auto-stop na `iter-limit`, JSONL kompletny (8 eventów). **Cache hit drugiej iteracji: $0.0067** (vs $0.0787 pierwszej) — realnie po warm-upie ~10× taniej. Webview banner i node-pty spawn nie pokryte (smoke test sesja 22, komponent niezmieniony od 0.0.3).
 - ✅ **Bump version + VSIX 0.0.4** (2026-04-20) — `package.json` 0.0.3→0.0.4, commit `326764a`, `cc-panel-0.0.4.vsix` zbudowany (60.86 KB). Zastąpiony przez 0.0.5.
-- [ ] **Upload na Marketplace** — ręczny upload `cc-panel-0.0.5.vsix`; docelowo PAT na dev.azure.com dla `vsce publish`.
+- [ ] **Upload na Marketplace** — ręczny upload `cc-panel-0.0.10.vsix`; docelowo PAT na dev.azure.com dla `vsce publish`.
 - [ ] **E2E przez F5** — test AA od UI: start wizard → trigger → Haiku response → banner.
 - [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku).
