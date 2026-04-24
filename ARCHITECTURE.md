@@ -81,8 +81,9 @@ Wszystkie komendy zarejestrowane w `package.json` mają odpowiadający `register
 - **slashCommands.ts** — 35 statycznych slash commands CC; `/color` jako 5 wariantów (`cyan`/`orange`/`purple`/`pink`/`random`) — nazwy z puli CC CLI, mapowane do kolorystyki T1–T4
 
 - **hooks/statusline.js** — chain-capable; czyta stdin (payload CC), kalkuluje ctx_pct (token_usage / 200k), merge z poprzednim state (zachowuje phase, last_message), zapisuje `~/.claude/cc-panel/state.{id}.json`; jeśli `chain.json` → forwarduje stdin do usera statusLine
-- **hooks/userpromptsubmit.js** — ustawia `phase=working` + zapisuje `transcript_path` w state.json
-- **hooks/stop.js** — ustawia `phase=waiting`, wyciąga `last_message` z transcript JSONL (ostatni assistant message, max 500 znaków), zapisuje w state.json
+- **hooks/userpromptsubmit.js** — ustawia `phase=working` + zapisuje `transcript_path` w state.json; odtwarza `~/.claude/cc-panel/sounds/{id}user.wav` jeśli istnieje
+- **hooks/stop.js** — ustawia `phase=waiting`, wyciąga `last_message` z transcript JSONL (ostatni assistant message, max 500 znaków), zapisuje w state.json; odtwarza `~/.claude/cc-panel/sounds/{id}stop.wav` jeśli istnieje
+- **Dźwięki WAV** — folder `~/.claude/cc-panel/sounds/`; pliki `{1-4}{stop|user}.wav` (brak pliku = cisza); odtwarzanie przez `System.Media.SoundPlayer` (PowerShell detached, nie blokuje hooka)
 
 ## Data flow — wysyłka komendy
 ```
@@ -226,8 +227,8 @@ resources/
     main.js                 applyAutoAccept, startAaClock/stopAaClock, aaHideTimer (auto-hide 5s), renderDashboard
   hooks/
     statusline.js           chain-capable, liczy ctx_pct, zapisuje state.{id}.json
-    userpromptsubmit.js     phase=working + transcript_path
-    stop.js                 phase=waiting + last_message (z transcript JSONL)
+    userpromptsubmit.js     phase=working + transcript_path + dźwięk {id}user.wav
+    stop.js                 phase=waiting + last_message (z transcript JSONL) + dźwięk {id}stop.wav
 ```
 
 ## Decisions

@@ -1,7 +1,7 @@
 ## Meta
 - project: cc-panel
-- session: 29
-- updated: 2026-04-23
+- session: 30
+- updated: 2026-04-24
 - repo: https://github.com/tftdatascientist/cc-panel (public, main)
 
 ## Hard Constraints (NIETYKALNE)
@@ -24,12 +24,13 @@ Fundament cc-panel ukończony. Szczegóły w `ARCHITECTURE.md` (komponenty, data
 - **Sesja 16** — weryfikacja (przez `ls ~/.claude/cc-panel/state.*.json`) że bug T2-T4 env nie reprodukuje — usunięcie stałych wpisów "Known bugs" w dokumentacji.
 
 ## Current
-- **Build:** `tsc --noEmit` czysto; esbuild bundle **255.8 KB** (dev) / **115.3 KB** (production). Zweryfikowane sesja 29 (2026-04-23).
-- **VSIX:** `cc-panel-0.0.10.vsix` zbudowany (59.56 KB), oczekuje na upload na Marketplace.
+- **Build:** `tsc --noEmit` czysto; esbuild bundle **255.8 KB** (dev) / **116.5 KB** (production). Zweryfikowane sesja 30 (2026-04-24).
+- **VSIX:** `cc-panel-0.0.12.vsix` (59.91 KB) — w sklepie Marketplace.
 - **Publisher:** `LokalnaAutomatyzacjaBiznesu`.
 - **Komendy:** 17 (12 core + 5 AA). Keybindings: `Ctrl+Alt+\`` (cycle), `Ctrl+Alt+1-4` / `F1-F4` (select terminal), `Ctrl+Alt+A` (start AA).
 - **Slash commands:** 35 pozycji; `/color` rozwinięty na 5 wariantów (cyan/orange/purple/pink/random) mapowanych do kolorów terminali T1-T4.
 - **Auto-Accept:** Kroki 1-7/7 zaimplementowane + poprawki sesji 26. Pipeline zweryfikowany E2E headless (sesja 23). Plan: `docs/AUTO_ACCEPT_PLAN.md`. Szczegóły: `ARCHITECTURE.md → Auto-Accept`. **E2E przez F5 jeszcze nieprzetestowane.**
+- **Dźwięki WAV:** `stop.js` + `userpromptsubmit.js` odtwarzają pliki z `~/.claude/cc-panel/sounds/`. Format: `{1-4}{stop|user}.wav`. Wymagane: `CC Panel: Install Hooks` po aktualizacji.
 
 ## Done — Auto-Accept (sesje 17-22)
 
@@ -146,7 +147,7 @@ Zrealizowano 3 z 4 planowanych zmian (decyzja usera: pominąć przeniesienie met
 
 - ✅ **E2E headless AA** (2026-04-20) — pipeline zweryfikowany bez F5: fake StateWatcher + realny TriggerDetector → realny HaikuHeadlessClient (claude.cmd) → realny BudgetEnforcer → realny SessionLogger → fake writeToTerminal. Trigger reactionMs ~110ms, 2 iteracje ("ok"/"ok"), auto-stop na `iter-limit`, JSONL kompletny (8 eventów). **Cache hit drugiej iteracji: $0.0067** (vs $0.0787 pierwszej) — realnie po warm-upie ~10× taniej. Webview banner i node-pty spawn nie pokryte (smoke test sesja 22, komponent niezmieniony od 0.0.3).
 - ✅ **Bump version + VSIX 0.0.4** (2026-04-20) — `package.json` 0.0.3→0.0.4, commit `326764a`, `cc-panel-0.0.4.vsix` zbudowany (60.86 KB). Zastąpiony przez 0.0.5.
-- [ ] **Upload na Marketplace** — ręczny upload `cc-panel-0.0.10.vsix`; docelowo PAT na dev.azure.com dla `vsce publish`.
+- ✅ **Dźwięki WAV per terminal** (sesja 30, 2026-04-24) — `stop.js` + `userpromptsubmit.js`; folder `~/.claude/cc-panel/sounds/`; pliki `{1-4}{stop|user}.wav`; 0.0.12 w sklepie.
 - [ ] **E2E przez F5** — test AA od UI: start wizard → trigger → Haiku response → banner.
 - [ ] **Test dashboardu** — weryfikacja Ctx%/Cost$/Total po Stop hooku (TranscriptReader z JSONL); backend zweryfikowany empirycznie w sesji 16 na 4 transcriptach.
 - [ ] **Test /resume** — TranscriptReader reset cache przy nowej sesji (shrink pliku).

@@ -4,7 +4,24 @@ Format: `[wersja] YYYY-MM-DD HH:MM` · status: `implemented` | `planned` | `rele
 
 ---
 
-## [0.0.11] — zbudowany, oczekuje na upload (sesja 30, 2026-04-24)
+## [0.0.12] — w sklepie (sesja 30, 2026-04-24)
+
+### Implemented
+
+| Czas | Zmiana | Pliki |
+|------|--------|-------|
+| 2026-04-24 | **Dźwięki WAV per terminal** — `stop.js` i `userpromptsubmit.js` odtwarzają plik WAV po zakończeniu tury CC (`Nstop.wav`) i po wysłaniu promptu przez usera (`Nuser.wav`). Pliki wgrywane do `~/.claude/cc-panel/sounds/`; brak pliku = cisza. Odtwarzanie przez `System.Media.SoundPlayer` (PowerShell, detached+unref — nie blokuje hooka). Błąd odtwarzania cichy. | `resources/hooks/stop.js`, `resources/hooks/userpromptsubmit.js` |
+
+### Status
+- `tsc --noEmit` — czysto
+- `npm run build` — esbuild bundle OK (255.8 KB / 116.5 KB production)
+- `cc-panel-0.0.12.vsix` — zbudowany (59.91 KB, 2026-04-24)
+- Marketplace — **w sklepie**
+- Po aktualizacji: wymagane `CC Panel: Install Hooks` żeby nowe hooki z dźwiękiem zastąpiły stare
+
+---
+
+## [0.0.11] — w sklepie (sesja 30, 2026-04-24)
 
 ### Implemented
 
@@ -13,10 +30,8 @@ Format: `[wersja] YYYY-MM-DD HH:MM` · status: `implemented` | `planned` | `rele
 | 2026-04-24 | **Rebuild z flat chips** — 0.0.10 wgrany na Marketplace nie zawierał zmian sesji 29 (spłaszczone chipy 36px). Bump do 0.0.11 bez zmian kodu, tylko rebuild VSIX z aktualnego source | `package.json` |
 
 ### Status
-- `tsc --noEmit` — czysto
-- `npm run build` — esbuild bundle OK (255.8 KB / 116.5 KB production)
 - `cc-panel-0.0.11.vsix` — zbudowany (59.3 KB, 2026-04-24)
-- Marketplace — **oczekuje na upload**
+- Marketplace — w sklepie
 
 ---
 
