@@ -271,6 +271,11 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     })
   );
+
+  // Startup check: CEM writes launch-request.json before opening VS Code.
+  // The --command flag is unreliable for new windows (races extension activation).
+  // We poll after 1500ms so panelManager and terminalManager are fully ready.
+  setTimeout(() => { void handleLaunchSlot(); }, 1500);
 }
 
 const LAUNCH_REQUEST_PATH = path.join(os.homedir(), ".claude", "cc-panel", "launch-request.json");

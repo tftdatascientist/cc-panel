@@ -2,7 +2,7 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.16",
+  "version": "0.0.17",
   "publisher": "LokalnaAutomatyzacjaBiznesu",
   "private": true,
   "repository": {
