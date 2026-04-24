@@ -31,8 +31,8 @@ function playSound(event) {
       require("child_process").spawn(
         "powershell",
         ["-NoProfile", "-NonInteractive", "-c",
-          `[System.Media.SoundPlayer]::new('${soundPath.replace(/'/g, "''")}').Play()`],
-        { detached: true, stdio: "ignore" }
+          "$s=[System.Media.SoundPlayer]::new($env:CCPANEL_SOUND);$s.Play();Start-Sleep -Milliseconds 4000"],
+        { detached: true, stdio: "ignore", env: Object.assign({}, process.env, { CCPANEL_SOUND: soundPath }) }
       ).unref();
     }
   } catch { /* dźwięk opcjonalny — błąd cichy */ }
