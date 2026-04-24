@@ -24,6 +24,20 @@ process.stdin.on("data", (chunk) => {
 process.stdin.on("end", () => update());
 process.stdin.on("error", () => update());
 
+function playSound(event) {
+  const soundPath = path.join(os.homedir(), ".claude", "cc-panel", "sounds", `${terminalId}${event}.wav`);
+  try {
+    if (fs.existsSync(soundPath)) {
+      require("child_process").spawn(
+        "powershell",
+        ["-NoProfile", "-NonInteractive", "-c",
+          `[System.Media.SoundPlayer]::new('${soundPath.replace(/'/g, "''")}').Play()`],
+        { detached: true, stdio: "ignore" }
+      ).unref();
+    }
+  } catch { /* dźwięk opcjonalny — błąd cichy */ }
+}
+
 function update() {
   let lastMessage;
   let transcriptPath;
@@ -58,6 +72,7 @@ function update() {
   } catch (err) {
     process.stderr.write(`cc-panel stop: ${err && err.message}\n`);
   }
+  playSound("stop");
 }
 
 function extractLastAssistantText(transcriptPath) {
