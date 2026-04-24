@@ -18,12 +18,12 @@ function playSound(event) {
   const soundPath = path.join(os.homedir(), ".claude", "cc-panel", "sounds", `${terminalId}${event}.wav`);
   try {
     if (fs.existsSync(soundPath)) {
-      require("child_process").spawn(
+      require("child_process").spawnSync(
         "powershell",
         ["-NoProfile", "-NonInteractive", "-c",
           "$s=[System.Media.SoundPlayer]::new($env:CCPANEL_SOUND);$s.Play();Start-Sleep -Milliseconds 4000"],
-        { detached: true, stdio: "ignore", env: Object.assign({}, process.env, { CCPANEL_SOUND: soundPath }) }
-      ).unref();
+        { stdio: "ignore", env: Object.assign({}, process.env, { CCPANEL_SOUND: soundPath }) }
+      );
     }
   } catch { /* dźwięk opcjonalny — błąd cichy */ }
 }
