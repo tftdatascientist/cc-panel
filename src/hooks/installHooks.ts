@@ -24,8 +24,42 @@ interface ClaudeSettings {
   [k: string]: unknown;
 }
 
+const HOOK_SCRIPTS = ["userpromptsubmit.js", "stop.js", "statusline.js"] as const;
 const EVENTS = ["UserPromptSubmit", "Stop"] as const;
 type HookEvent = (typeof EVENTS)[number];
+
+/** Cicha auto-aktualizacja ścieżek hooków przy starcie — bez powiadomień. */
+export function syncHookPaths(extensionUri: vscode.Uri): void {
+  const hooksRoot = vscode.Uri.joinPath(extensionUri, "resources", "hooks").fsPath;
+  const settingsPath = path.join(os.homedir(), ".claude", "settings.json");
+  if (!fs.existsSync(settingsPath)) return;
+  let settings: ClaudeSettings;
+  try {
+    settings = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as ClaudeSettings;
+  } catch { return; }
+
+  let changed = false;
+  const hooks = settings.hooks ?? {};
+  for (const entries of Object.values(hooks)) {
+    for (const entry of entries) {
+      for (const h of entry.hooks ?? []) {
+        for (const script of HOOK_SCRIPTS) {
+          if ((h.command ?? "").includes(script)) {
+            const newCmd = cmdFor(path.join(hooksRoot, script));
+            if (h.command !== newCmd) { h.command = newCmd; changed = true; }
+          }
+        }
+      }
+    }
+  }
+  if (settings.statusLine?.command?.includes("statusline.js")) {
+    const newCmd = cmdFor(path.join(hooksRoot, "statusline.js"));
+    if (settings.statusLine.command !== newCmd) { settings.statusLine.command = newCmd; changed = true; }
+  }
+  if (changed) {
+    try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n"); } catch { /* ignore */ }
+  }
+}
 
 export async function installHooks(extensionUri: vscode.Uri): Promise<void> {
   const hooksRoot = vscode.Uri.joinPath(extensionUri, "resources", "hooks").fsPath;

@@ -13,7 +13,7 @@ import {
 } from "./panel/messages";
 import type { AutoAcceptStatus } from "./auto-accept/types";
 
-import { installHooks } from "./hooks/installHooks";
+import { installHooks, syncHookPaths } from "./hooks/installHooks";
 import { UserListsStore } from "./settings/UserListsStore";
 import { SLASH_COMMANDS } from "./settings/slashCommands";
 import {
@@ -44,6 +44,7 @@ let autoAcceptSession: AutoAcceptSession | undefined;
 let activeTerminalId: TerminalId = 1;
 
 export function activate(context: vscode.ExtensionContext): void {
+  syncHookPaths(context.extensionUri);
   context.subscriptions.push(terminalManager);
 
   userListsStore = new UserListsStore();
