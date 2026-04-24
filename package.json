@@ -2,7 +2,7 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.12",
+  "version": "0.0.15",
   "publisher": "LokalnaAutomatyzacjaBiznesu",
   "private": true,
   "repository": {
@@ -86,6 +86,10 @@
       {
         "command": "ccPanel.autoAcceptStatus",
         "title": "CC Panel: Auto-Accept Status"
+      },
+      {
+        "command": "ccPanel.launchSlot",
+        "title": "CC Panel: Launch Slot (from launch-request.json)"
       }
     ],
     "keybindings": [

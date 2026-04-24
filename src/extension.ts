@@ -1,4 +1,7 @@
 import * as vscode from "vscode";
+import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 import { TerminalManager } from "./terminals/TerminalManager";
 import { PanelManager } from "./panel/PanelManager";
 import {
@@ -257,6 +260,72 @@ export function activate(context: vscode.ExtensionContext): void {
       void vscode.window.showInformationMessage("Auto-Accept system prompt zapisany.");
     }),
   );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ccPanel.launchSlot", async () => {
+      try { await handleLaunchSlot(); }
+      catch (err) {
+        const msg = err instanceof Error ? err.stack ?? err.message : String(err);
+        console.error("[cc-panel] ccPanel.launchSlot ERROR:", msg);
+        void vscode.window.showErrorMessage(`CC Panel launchSlot failed: ${msg.split("\n")[0]}`);
+      }
+    })
+  );
+}
+
+const LAUNCH_REQUEST_PATH = path.join(os.homedir(), ".claude", "cc-panel", "launch-request.json");
+
+interface LaunchRequest {
+  slotId: number;
+  projectPath?: string;
+  terminalCount?: number;
+  vibePrompt?: string;
+}
+
+async function handleLaunchSlot(): Promise<void> {
+  if (!fs.existsSync(LAUNCH_REQUEST_PATH)) return;
+  let req: LaunchRequest;
+  try { req = JSON.parse(fs.readFileSync(LAUNCH_REQUEST_PATH, "utf8")); }
+  catch { try { fs.unlinkSync(LAUNCH_REQUEST_PATH); } catch {} return; }
+  try { fs.unlinkSync(LAUNCH_REQUEST_PATH); } catch {}
+
+  if (!isTerminalId(req.slotId)) return;
+  const startId = req.slotId as TerminalId;
+  const count = Math.max(1, Math.min(4, req.terminalCount ?? 1));
+
+  await panelManager!.openOrReveal();
+
+  const created: TerminalId[] = [];
+  for (let i = 0; i < count; i++) {
+    const id = (startId + i) as TerminalId;
+    if (!isTerminalId(id)) break;
+    if (terminalManager.get(id)) continue;
+    const terminal = terminalManager.create(id, projectPathFor(id) || req.projectPath);
+    terminal.show(false);
+    created.push(id);
+  }
+  if (created.length > 0) {
+    activeTerminalId = created[0];
+    panelManager?.setActive(created[0]);
+  }
+
+  if (req.vibePrompt?.trim()) {
+    for (const id of created) schedulePromptInjection(id, req.vibePrompt);
+  }
+}
+
+function schedulePromptInjection(id: TerminalId, prompt: string): void {
+  const statePath = path.join(os.homedir(), ".claude", "cc-panel", `state.${id}.json`);
+  let done = false;
+  const send = () => {
+    if (done) return;
+    done = true;
+    clearInterval(poll);
+    clearTimeout(fallback);
+    setTimeout(() => terminalManager.write(id, prompt + "\r"), 2500);
+  };
+  const poll = setInterval(() => { if (fs.existsSync(statePath)) send(); }, 500);
+  const fallback = setTimeout(send, 20_000);
 }
 
 export function deactivate(): void {
