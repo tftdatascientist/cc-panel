@@ -2,7 +2,7 @@
   "name": "cc-panel",
   "displayName": "CC Panel",
   "description": "Panel sterujący 1-4 sesjami Claude Code w obszarze edytora VS Code",
-  "version": "0.0.18",
+  "version": "0.0.22",
   "publisher": "LokalnaAutomatyzacjaBiznesu",
   "private": true,
   "repository": {
@@ -28,8 +28,12 @@
         "title": "CC Panel: Add Terminal"
       },
       {
-        "command": "ccPanel.cycleActive",
-        "title": "CC Panel: Cycle Active Terminal"
+        "command": "ccPanel.installHooks",
+        "title": "CC Panel: Install Hooks"
+      },
+      {
+        "command": "ccPanel.setProjectFolder",
+        "title": "CC Panel: Ustaw folder projektu"
       },
       {
         "command": "ccPanel.editUserCommands",
@@ -40,56 +44,8 @@
         "title": "CC Panel: Edit Messages"
       },
       {
-        "command": "ccPanel.reloadUserLists",
-        "title": "CC Panel: Reload ustawienia.json"
-      },
-      {
-        "command": "ccPanel.installHooks",
-        "title": "CC Panel: Install Hooks"
-      },
-      {
-        "command": "ccPanel.setProjectFolder",
-        "title": "CC Panel: Ustaw folder projektu"
-      },
-      {
-        "command": "ccPanel.selectTerminal1",
-        "title": "CC Panel: Select Terminal 1"
-      },
-      {
-        "command": "ccPanel.selectTerminal2",
-        "title": "CC Panel: Select Terminal 2"
-      },
-      {
-        "command": "ccPanel.selectTerminal3",
-        "title": "CC Panel: Select Terminal 3"
-      },
-      {
-        "command": "ccPanel.selectTerminal4",
-        "title": "CC Panel: Select Terminal 4"
-      },
-      {
-        "command": "ccPanel.startAutoAccept",
-        "title": "CC Panel: Start Auto-Accept"
-      },
-      {
-        "command": "ccPanel.stopAutoAccept",
-        "title": "CC Panel: Stop Auto-Accept"
-      },
-      {
-        "command": "ccPanel.editAutoAcceptSystemPrompt",
-        "title": "CC Panel: Edit Auto-Accept System Prompt"
-      },
-      {
-        "command": "ccPanel.showAutoAcceptHistory",
-        "title": "CC Panel: Show Auto-Accept History"
-      },
-      {
-        "command": "ccPanel.autoAcceptStatus",
-        "title": "CC Panel: Auto-Accept Status"
-      },
-      {
-        "command": "ccPanel.launchSlot",
-        "title": "CC Panel: Launch Slot (from launch-request.json)"
+        "command": "ccPanel.syncTerminals",
+        "title": "CC Panel: Sync Terminals"
       }
     ],
     "keybindings": [

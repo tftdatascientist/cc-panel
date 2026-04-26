@@ -24,6 +24,7 @@ export interface UsageStat {
 
 /** Limity deduplikacji/cap'a — trzymane tu, żeby łatwo zmienić w jednym miejscu. */
 const HISTORY_CAP = 100;
+const PICK_HISTORY_CAP = 10;
 
 export interface UserLists {
   slashDropdown: UserCommandItem[];
@@ -32,6 +33,8 @@ export interface UserLists {
   projectPaths: ProjectPaths;
   /** LRU ostatnio użytych komend (najnowsza na pozycji 0), cap 100, dedup exact-match. */
   history: string[];
+  /** LRU ostatnio wybranych z chip QuickPick — oddzielne od `history` (bar-top), cap 10. */
+  pickHistory: string[];
   /** Licznik użycia per value — ranking dla sortowania dropdownu po częstości. */
   usageStats: Record<string, UsageStat>;
 }
@@ -42,6 +45,7 @@ const EMPTY: UserLists = {
   messages: [],
   projectPaths: ["", "", "", ""],
   history: [],
+  pickHistory: [],
   usageStats: {},
 };
 
@@ -88,6 +92,16 @@ export class UserListsStore implements vscode.Disposable {
     };
 
     await this.save({ ...this.lists, history, usageStats });
+  }
+
+  /** Odnotuj wybór z chip QuickPick — aktualizuje pickHistory (LRU, dedup, cap 10). */
+  async recordPickHistory(value: string): Promise<void> {
+    const v = value.trim();
+    if (v.length === 0) return;
+    const filtered = this.lists.pickHistory.filter((h) => h !== v);
+    filtered.unshift(v);
+    const pickHistory = filtered.slice(0, PICK_HISTORY_CAP);
+    await this.save({ ...this.lists, pickHistory });
   }
 
   async save(next: UserLists): Promise<void> {
@@ -168,6 +182,19 @@ function validate(raw: unknown): UserLists {
     }
   } else if (typeof obj.projectPath === "string" && obj.projectPath.trim().length > 0) {
     out.projectPaths[0] = obj.projectPath.trim();
+  }
+
+  // pickHistory: backward-compat — gdy brak pola, zostaje []
+  if (Array.isArray(obj.pickHistory)) {
+    const seen = new Set<string>();
+    for (const h of obj.pickHistory) {
+      if (typeof h !== "string") continue;
+      const v = h.trim();
+      if (v.length === 0 || seen.has(v)) continue;
+      seen.add(v);
+      out.pickHistory.push(v);
+      if (out.pickHistory.length >= PICK_HISTORY_CAP) break;
+    }
   }
 
   // history: backward-compat — gdy brak pola, zostaje []

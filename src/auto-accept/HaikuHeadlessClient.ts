@@ -1,57 +1,23 @@
-import { execFile } from "child_process";
-import { promisify } from "util";
-import * as path from "path";
-import * as fs from "fs";
+import { spawn } from "child_process";
+import * as vscode from "vscode";
 import type { HaikuResponse } from "./types";
 
-const execFileAsync = promisify(execFile);
-
 /**
- * Odpala `claude -p --output-format json --model haiku` jako subprocess.
+ * Odpala `<ccPanel.command> -p --output-format json --model haiku` jako subprocess.
  *
- * Kontrakt CLI (smoke test 2026-04-20, claude 2.1.114):
- *   echo <prompt> | claude -p --output-format json --model haiku
- *   → stdout: JSON z polami result/total_cost_usd/duration_ms/usage/session_id
+ * Używa spawn({ shell: true }) zamiast execFile — shell sam rozwiązuje PATH
+ * (w tym .cmd shimsy npm na Windows), bez konieczności skanowania process.env.PATH
+ * z poziomu VS Code extension host (który ma uboższy PATH niż terminal usera).
  *
- * Windows gotcha: `claude` to shim .cmd w AppData\Roaming\npm. execFile bez
- * shell:true nie znajdzie pliku bez rozszerzenia. Resolvujemy pełną ścieżkę
- * ręcznie z PATH (szukając claude.cmd/claude.exe/claude).
+ * Prompt przekazywany przez stdin (standardowy interfejs claude -p w print-mode).
  */
 
-const TIMEOUT_MS = 60_000;
-const MAX_BUFFER = 2 * 1024 * 1024;
-
-let resolvedClaudePath: string | null | undefined = undefined;
-
-function resolveClaudePath(): string | null {
-  if (resolvedClaudePath !== undefined) return resolvedClaudePath;
-
-  const envPath = process.env.PATH || "";
-  const sep = process.platform === "win32" ? ";" : ":";
-  const candidates = process.platform === "win32"
-    ? ["claude.cmd", "claude.exe", "claude"]
-    : ["claude"];
-
-  for (const dir of envPath.split(sep)) {
-    if (!dir) continue;
-    for (const name of candidates) {
-      const full = path.join(dir, name);
-      try {
-        if (fs.existsSync(full) && fs.statSync(full).isFile()) {
-          resolvedClaudePath = full;
-          return full;
-        }
-      } catch {
-        // ignore, try next
-      }
-    }
-  }
-  resolvedClaudePath = null;
-  return null;
-}
-
 export class HaikuCliError extends Error {
-  constructor(message: string, public readonly stderr?: string, public readonly exitCode?: number) {
+  constructor(
+    message: string,
+    public readonly stderr?: string,
+    public readonly exitCode?: number,
+  ) {
     super(message);
     this.name = "HaikuCliError";
   }
@@ -64,53 +30,74 @@ export interface HaikuInvokeOptions {
   timeoutMs?: number;
 }
 
-export async function invokeHaiku(opts: HaikuInvokeOptions): Promise<HaikuResponse> {
-  const claudePath = resolveClaudePath();
-  if (!claudePath) {
-    throw new HaikuCliError(
-      "Nie znaleziono CLI `claude` w PATH. Zainstaluj Claude Code CLI i upewnij się że `claude` działa w terminalu."
-    );
-  }
+const DEFAULT_TIMEOUT_MS = 60_000;
+const MAX_STDOUT_BYTES = 2 * 1024 * 1024;
 
+export async function invokeHaiku(opts: HaikuInvokeOptions): Promise<HaikuResponse> {
+  const command =
+    vscode.workspace.getConfiguration("ccPanel").get<string>("command") ?? "claude";
   const args = ["-p", "--output-format", "json", "--model", "haiku"];
   if (opts.systemPrompt) {
-    // --system replaces the default Claude system prompt entirely — required so Haiku
-    // doesn't receive "You are Claude, an AI assistant" framing that overrides role instructions
     args.push("--system", opts.systemPrompt);
   }
 
-  // Windows Node 20+ security hardening (CVE-2024-27980): spawn/execFile odmawia
-  // uruchomienia .cmd/.bat bez shell:true. claude CLI to shim .cmd w npm global bin.
-  // args są kontrolowane przez nas (nie user input), więc shell:true jest bezpieczne.
-  const needsShell = process.platform === "win32" && /\.(cmd|bat)$/i.test(claudePath);
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
 
-  const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
-  const child = execFile(claudePath, args, {
-    timeout: timeoutMs,
-    maxBuffer: MAX_BUFFER,
+  const child = spawn(command, args, {
+    shell: true,
     windowsHide: true,
-    signal: opts.signal,
-    shell: needsShell,
   });
+
+  if (opts.signal?.aborted) {
+    child.kill();
+    throw new HaikuCliError("Przerwano przed startem (abort signal)");
+  }
+
+  const onAbort = () => child.kill("SIGTERM");
+  opts.signal?.addEventListener("abort", onAbort, { once: true });
 
   child.stdin?.setDefaultEncoding("utf8");
   child.stdin?.end(opts.prompt);
 
   let stdout = "";
   let stderr = "";
-  child.stdout?.on("data", (d: Buffer | string) => { stdout += d.toString("utf8"); });
-  child.stderr?.on("data", (d: Buffer | string) => { stderr += d.toString("utf8"); });
-
-  const exitCode: number = await new Promise((resolve, reject) => {
-    child.on("error", reject);
-    child.on("close", (code) => resolve(code ?? -1));
+  let stdoutBytes = 0;
+  child.stdout?.on("data", (d: Buffer | string) => {
+    const chunk = Buffer.isBuffer(d) ? d.toString("utf8") : d;
+    stdoutBytes += chunk.length;
+    if (stdoutBytes <= MAX_STDOUT_BYTES) stdout += chunk;
   });
+  child.stderr?.on("data", (d: Buffer | string) => {
+    const chunk = Buffer.isBuffer(d) ? d.toString("utf8") : d;
+    stderr += chunk.slice(0, 2000);
+  });
+
+  const exitCode = await Promise.race<number>([
+    new Promise<number>((resolve, reject) => {
+      child.on("error", (err) =>
+        reject(new HaikuCliError(`Nie udało się uruchomić '${command}': ${err.message}`))
+      );
+      child.on("close", (code) => resolve(code ?? -1));
+    }),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => {
+        child.kill("SIGTERM");
+        reject(new HaikuCliError(`Timeout po ${timeoutMs}ms`));
+      }, timeoutMs)
+    ),
+  ]);
+
+  opts.signal?.removeEventListener("abort", onAbort);
+
+  if (opts.signal?.aborted) {
+    throw new HaikuCliError("Przerwano (abort signal)");
+  }
 
   if (exitCode !== 0) {
     throw new HaikuCliError(
-      `claude CLI zakończył z exit code ${exitCode}`,
+      `'${command} -p' zakończył z exit code ${exitCode}`,
       stderr.trim() || undefined,
-      exitCode
+      exitCode,
     );
   }
 
@@ -119,15 +106,15 @@ export async function invokeHaiku(opts: HaikuInvokeOptions): Promise<HaikuRespon
     parsed = JSON.parse(stdout) as Record<string, unknown>;
   } catch (e) {
     throw new HaikuCliError(
-      `Nie udało się sparsować odpowiedzi claude -p jako JSON: ${(e as Error).message}`,
-      stdout.slice(0, 500)
+      `Nie udało się sparsować odpowiedzi jako JSON: ${(e as Error).message}`,
+      stdout.slice(0, 500),
     );
   }
 
   if (parsed.is_error === true || parsed.subtype === "error") {
     throw new HaikuCliError(
-      `claude -p zwrócił błąd: ${String(parsed.result ?? parsed.error ?? "unknown")}`,
-      JSON.stringify(parsed).slice(0, 500)
+      `CLI zwrócił błąd: ${String(parsed.result ?? parsed.error ?? "unknown")}`,
+      JSON.stringify(parsed).slice(0, 500),
     );
   }
 

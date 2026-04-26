@@ -112,6 +112,7 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("ccPanel.open", async () => {
       try {
+        terminalManager.scanAndReconnect();
         await panelManager!.openOrReveal();
         await ensureTerminal(1);
         activeTerminalId = 1;
@@ -126,6 +127,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("ccPanel.addTerminal", async () => {
+      terminalManager.scanAndReconnect();
       const next = nextFreeTerminalId();
       if (!next) {
         vscode.window.showInformationMessage(
@@ -166,6 +168,23 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("ccPanel.reloadUserLists", () => {
       userListsStore?.reload();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("ccPanel.syncTerminals", () => {
+      const reconnected = terminalManager.scanAndReconnect();
+      const ids = terminalManager.activeIds().filter(isTerminalId) as TerminalId[];
+      panelManager?.setTerminals(ids);
+      if (reconnected.length > 0) {
+        void vscode.window.showInformationMessage(
+          `CC Panel: podłączono ${reconnected.map((id) => `T${id}`).join(", ")}.`
+        );
+      } else {
+        void vscode.window.showInformationMessage(
+          "CC Panel: brak otwartych terminali CC #1–4 do podłączenia."
+        );
+      }
     })
   );
 
@@ -531,8 +550,14 @@ async function showTerminalQuickPick(chipId: TerminalId): Promise<void> {
   const lists = userListsStore.current();
   const items: vscode.QuickPickItem[] = [];
 
+  if (lists.pickHistory.length > 0) {
+    items.push({ label: "Ostatnie", kind: vscode.QuickPickItemKind.Separator });
+    for (const v of lists.pickHistory) {
+      items.push({ label: v });
+    }
+  }
   if (lists.history.length > 0) {
-    items.push({ label: "Historia", kind: vscode.QuickPickItemKind.Separator });
+    items.push({ label: "Historia (bar)", kind: vscode.QuickPickItemKind.Separator });
     for (const v of lists.history.slice(0, 20)) {
       items.push({ label: v });
     }
@@ -571,6 +596,7 @@ async function showTerminalQuickPick(chipId: TerminalId): Promise<void> {
     return;
   }
   void userListsStore?.recordCommand(text);
+  void userListsStore?.recordPickHistory(text);
 }
 
 function cycleActiveTerminal(): void {

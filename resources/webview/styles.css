@@ -171,41 +171,42 @@ html, body {
 }
 
 /* ── Wskaźniki fazy (working / waiting) ───────────────────────────────────
-   Maksymalnie rozróżnione, żeby user natychmiast widział co robi CC:
-   - working: pulsujący glow (box-shadow nie modyfikuje layoutu) + tło w kolorze
-              terminala + pulsujący dot w lewym górnym rogu. Trzy sygnały naraz.
-   - waiting: stały outline (box-shadow, nie border-width żeby nie skakało) +
-              pełny statyczny dot w innej pozycji (prawy górny) + delikatne tło.
-   - idle:   nic (brak fazy jeszcze).
-   box-shadow zamiast border-width = zero layout shift przy przełączaniu faz. */
+   - working: cały frame delikatnie pulsuje (border + zewnętrzny glow) w kolorze
+              aktywnego terminala; chip zmienia tło na kolorowe.
+              Nieaktywne terminale w fazie working: chip tło bez animacji.
+   - waiting: stały outline na chipie (box-shadow, nie border-width = zero layout shift) +
+              statyczny dot kółko.
+   - idle:    nic.
+   box-shadow na frame i chipie nie wpływa na layout — zero przesunięć przy zmianie faz. */
 @keyframes cc-pulse {
   0%, 100% { opacity: 1;   transform: scale(1);    }
   50%       { opacity: 0.4; transform: scale(0.75); }
 }
-@keyframes cc-glow {
-  0%, 100% { box-shadow: 0 0 0 2px var(--t-color), 0 0 8px 2px color-mix(in srgb, var(--t-color) 50%, transparent); }
-  50%      { box-shadow: 0 0 0 2px var(--t-color), 0 0 14px 4px color-mix(in srgb, var(--t-color) 75%, transparent); }
+@keyframes frame-pulse {
+  0%, 100% {
+    border-color: var(--accent);
+    box-shadow: inset 0 0 10px 0px color-mix(in srgb, var(--accent) 15%, transparent);
+  }
+  50% {
+    border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+    box-shadow: inset 0 0 40px 8px color-mix(in srgb, var(--accent) 28%, transparent);
+  }
 }
 
-/* WORKING — pulsujący glow + tło + dot. Trzy warstwy sygnału. */
+/* WORKING — frame pulsuje wewnętrzną poświatą, cały chip pulsuje */
+.frame[data-phase="working"] {
+  animation: frame-pulse 1.6s ease-in-out infinite;
+}
+@keyframes chip-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.35; }
+}
 .chip-t[data-phase="working"] {
-  background: color-mix(in srgb, var(--t-color) 20%, var(--bg)) !important;
-  animation: cc-glow 1.4s ease-in-out infinite;
-}
-.chip-t[data-phase="working"]::before {
-  content: "";
-  position: absolute;
-  top: 3px;
-  left: 4px;
-  width: 7px;
-  height: 7px;
-  background: var(--t-color);
-  border-radius: 50%;
-  animation: cc-pulse 1.4s ease-in-out infinite;
-  box-shadow: 0 0 6px var(--t-color);
+  background: color-mix(in srgb, var(--t-color) 35%, var(--bg)) !important;
+  animation: chip-pulse 1.0s ease-in-out infinite;
 }
 
-/* WAITING — statyczny outline + solidny dot. Wyraźnie inny od working. */
+/* WAITING — statyczny outline na chipie + dot kółko. */
 .chip-t[data-phase="waiting"] {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-color) 50%, transparent);
 }

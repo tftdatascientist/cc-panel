@@ -7,13 +7,12 @@ import type {
   HaikuResponse,
 } from "./types";
 import { BudgetEnforcer } from "./BudgetEnforcer";
-import { CircuitBreaker } from "./CircuitBreaker";
 import { TriggerDetector, type TriggerEvent } from "./TriggerDetector";
 import { SessionLogger, newSessionId } from "./SessionLogger";
 
 /**
  * Orkiestrator AA session. Łączy TriggerDetector → BudgetEnforcer → Haiku →
- * CircuitBreaker → writeToTerminal → SessionLogger.
+ * writeToTerminal → SessionLogger.
  *
  * Lifecycle:
  *   new → start(config) → [edges & dispatches] → stop(reason) | dispose()
@@ -70,7 +69,6 @@ export class AutoAcceptSession implements vscode.Disposable {
   private config: AutoAcceptConfig | null = null;
   private startedAt: number | null = null;
   private budget: BudgetEnforcer | null = null;
-  private breaker: CircuitBreaker | null = null;
   private logger: SessionLogger | null = null;
   private triggerSub: vscode.Disposable | null = null;
   private currentAbort: AbortController | null = null;
@@ -114,7 +112,6 @@ export class AutoAcceptSession implements vscode.Disposable {
     this.config = config;
     this.startedAt = Date.now();
     this.budget = new BudgetEnforcer(config, this.startedAt);
-    this.breaker = new CircuitBreaker();
     this.logger = new SessionLogger(this.sessionId);
     this.consecutiveErrors = 0;
     this.lastError = null;
@@ -159,7 +156,7 @@ export class AutoAcceptSession implements vscode.Disposable {
   }
 
   private async handleTrigger(event: TriggerEvent): Promise<void> {
-    if (this.stopped || !this.config || !this.budget || !this.breaker || !this.logger) return;
+    if (this.stopped || !this.config || !this.budget || !this.logger) return;
 
     const iter = this.budget.getIterationsUsed() + 1;
 
@@ -235,12 +232,6 @@ export class AutoAcceptSession implements vscode.Disposable {
     this.logger.logHaikuResponse(iter, response);
     this.budget.recordIteration();
     this.cumulativeCcCostUsd = Math.max(0, this.deps.getCcCostUsd(this.config.terminalId) - this.startCostUsd);
-
-    const breakerDecision = this.breaker.analyze(response.result);
-    if (breakerDecision.tripped) {
-      this.stop("circuit-breaker");
-      return;
-    }
 
     const text = response.result.trim();
     if (text.length === 0) {

@@ -124,6 +124,12 @@
       if (ctxEl)  ctxEl.textContent  = formatMetric(snap, "ctx");
     }
 
+    // Frame pulsuje gdy aktywny terminal pracuje
+    const activeSnap = dashboardState[activeTermId];
+    const activePhase = activeSnap && (activeSnap.phase === "working" || activeSnap.phase === "waiting")
+      ? activeSnap.phase : "idle";
+    frame.dataset.phase = activePhase;
+
     // Globalny interval: odświeżaj timery co sekundę gdy ktokolwiek czeka
     if (anyWaiting && !waitTimerInterval) {
       waitTimerInterval = setInterval(tickWaitTimers, 1000);

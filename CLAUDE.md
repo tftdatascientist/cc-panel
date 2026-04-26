@@ -4,18 +4,18 @@
 
 Rozszerzenie VS Code do równoległej obsługi 1-4 sesji Claude Code z pływającego `WebviewPanel` (zakładka edytora, drag poza VS Code dla osobnego okna).
 
-@STATUS.md
+@PLAN.md
 @ARCHITECTURE.md
 
 ## Workflow
 
-1. Przeczytaj `STATUS.md` (Done/Next/Known bugs) i `ARCHITECTURE.md` (layout, data flow, komendy)
-2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `STATUS.md`/`ARCHITECTURE.md`
+1. Przeczytaj `PLAN.md` (Meta/Stan bieżący/Done/Next/Bugs) i `ARCHITECTURE.md` (layout, data flow, komendy)
+2. Wykryte rozbieżności z dokumentacją lub kodem → zaktualizuj `PLAN.md`/`ARCHITECTURE.md`
 3. Zmiany (zaimplementowane i planowane) zapisuj w `CHANGELOG.md` z datą, godziną i wersją
 
 ## Auto-Accept Mode (zaimplementowany, sesje 17-23)
 
-Pipeline: `TriggerDetector` (krawędź working→waiting) → `BudgetEnforcer` (time/iter/cost, każdy `null` = unlimited) → `HaikuHeadlessClient` (`claude -p --output-format json --model haiku`) → `CircuitBreaker` (similarity ≥0.80 + idle-length ±10%) → `writeToTerminal` → `SessionLogger` (JSONL append-only). Default budget: 15 min / $5.00 / 50 iter. **Realny koszt Haiku ~$0.07/iter** (cache_creation 58k tokens), po warm-upie (cache hit) ~$0.007/iter. Keybinding `Ctrl+Alt+A`. Scope: single-active globalnie (D2). Plan: `docs/AUTO_ACCEPT_PLAN.md`. **VSIX 0.0.4 zbudowany (2026-04-20), oczekuje na upload.**
+Pipeline: `TriggerDetector` (krawędź working→waiting) → `BudgetEnforcer` (time/iter/cost, każdy `null` = unlimited) → `HaikuHeadlessClient` (`claude -p --output-format json --model haiku`) → `CircuitBreaker` (similarity ≥0.80 + idle-length ±10%) → `writeToTerminal` → `SessionLogger` (JSONL append-only). Default budget: 15 min / $5.00 / 50 iter. **Realny koszt Haiku ~$0.07/iter** (cache_creation 58k tokens), po warm-upie (cache hit) ~$0.007/iter. Keybinding `Ctrl+Alt+A`. Scope: single-active globalnie (D2). Plan: `docs/AUTO_ACCEPT_PLAN.md`. **VSIX 0.0.18 w Marketplace.**
 
 ## Commands
 
@@ -78,7 +78,7 @@ Szczegóły layoutu panelu (bar-top / bar-terms / dashboard) — patrz `ARCHITEC
 ## Specifics (nietykalne zasady)
 
 - **CC ZAWSZE spawnowany przez ekstensję** — nigdy attach do istniejącego terminala (kontrola env i PTY I/O)
-- **Statusline CC w terminalu jest święty** — `STATUS.md → Hard Constraints`: user ma własny ccstatusline (`Model | Ctx% | Session% | Session time | Cost | Weekly% | Total`). cc-panel **nigdy** nie podmienia tego paska. Opcja "Podmień" z `installHooks` jest wykluczona. Jeśli funkcja wymaga podmiany statusline → rezygnujemy z funkcji, nie ze statusline. Chain mode teoretycznie OK, ale w praktyce nie działa — przed proponowaniem wymagana diagnoza bugu
+- **Statusline CC w terminalu jest święty** — `PLAN.md → Hard Constraints`: user ma własny ccstatusline (`Model | Ctx% | Session% | Session time | Cost | Weekly% | Total`). cc-panel **nigdy** nie podmienia tego paska. Opcja "Podmień" z `installHooks` jest wykluczona. Jeśli funkcja wymaga podmiany statusline → rezygnujemy z funkcji, nie ze statusline. Chain mode teoretycznie OK, ale w praktyce nie działa — przed proponowaniem wymagana diagnoza bugu
 - **Źródło prawdy metryk (Ctx%, cost, model, last_message): statusLine + Stop hooki CC zapisujące `~/.claude/cc-panel/state.{id}.json`** + TranscriptReader z JSONL. **Parsowanie ANSI z terminala ZABRONIONE** (niestabilne, łamie chain)
 - **Identyfikacja terminala:** `env.CC_PANEL_TERMINAL_ID=1..4` przekazywane przy spawnie i czytane przez wszystkie hooki. Przy nieustawionym env hook robi `process.exit(0)` (nie zapisuje state)
 - **Tab koliduje z terminal completion** — przełączanie przez `ccPanel.cycleActive` (Ctrl+Alt+\`) oraz `ccPanel.selectTerminal1-4` (Ctrl+Alt+1-4, F1-F4 gdy fokus na panelu)
@@ -89,6 +89,6 @@ Szczegóły layoutu panelu (bar-top / bar-terms / dashboard) — patrz `ARCHITEC
 ## Repo conventions
 
 - Brak testów jednostkowych — jedyna weryfikacja to `npm run compile-types` (tsc --noEmit) + F5 + ręczny scenariusz
-- Polish w dokumentacji (CLAUDE.md/STATUS.md/ARCHITECTURE.md/komunikaty), English w kodzie/identyfikatorach
+- Polish w dokumentacji (CLAUDE.md/PLAN.md/ARCHITECTURE.md/komunikaty), English w kodzie/identyfikatorach
 - VSIX-y w root repo (`cc-panel-*.vsix`) — nie commitować nowych wersji bez bumpu w `package.json`
 - Zmiany dokumentować w `CHANGELOG.md` — nie tworzyć commitów "podsumowanie sesji"

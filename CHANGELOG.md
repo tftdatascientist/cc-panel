@@ -4,6 +4,73 @@ Format: `[wersja] YYYY-MM-DD HH:MM` · status: `implemented` | `planned` | `rele
 
 ---
 
+## [0.0.22] — 2026-04-26
+
+### Implemented
+
+| Czas | Zmiana | Pliki |
+|------|--------|-------|
+| 2026-04-26 | **Pulsowanie całego chipa przy pracy** — w fazie `working` cały chip pulsuje (opacity 1→0.35→1, 1s) zamiast subtelnego kolorowego tła. Animacja `chip-pulse` w CSS; tło zmocnione do 35% koloru terminala. | `resources/webview/styles.css` |
+
+### Status
+- `tsc --noEmit` — czysto
+- `npm run build` — esbuild bundle OK (259 KB)
+- Marketplace — do wgrania
+
+---
+
+## [0.0.21] — 2026-04-25
+
+### Implemented
+
+| Czas | Zmiana | Pliki |
+|------|--------|-------|
+| 2026-04-25 | **Reconnect terminali CC #1–4** — `TerminalManager.scanAndReconnect()` skanuje `vscode.window.terminals` i podłącza istniejące terminale o nazwach `CC #N` bez tworzenia nowych. Wywoływane automatycznie przy `Open`, `Add Terminal` i przy starcie ekstensji. Dodana komenda `CC Panel: Sync Terminals` do ręcznej synchronizacji. | `src/terminals/TerminalManager.ts`, `src/extension.ts`, `package.json` |
+
+### Status
+- `tsc --noEmit` — czysto
+- `cc-panel-0.0.21.vsix` — zbudowany
+- Marketplace — do wgrania
+
+---
+
+## [0.0.20] — 2026-04-25
+
+### Implemented
+
+| Czas | Zmiana | Pliki |
+|------|--------|-------|
+| 2026-04-25 | **Synchronizacja metryk chipów ze statusline** — chipy czytają `cost_usd` i `ctx_pct` bezpośrednio z `state.json` (zapisywanego przez statusline hook CC), a nie z TranscriptReader który wyliczał własne wartości ze statycznej tabeli cen. `StateFileShape` rozszerzone o brakujące pola. `totalTokens` nadal z TranscriptReader. | `src/state/StateWatcher.ts` |
+| 2026-04-25 | **Auto-Accept — ukrycie z Command Palette** — 5 komend AA usunięte z `contributes.commands` (niewidoczne w palecie). `Ctrl+Alt+A` i banner nadal działają. | `package.json` |
+| 2026-04-25 | **Auto-Accept — przebudowa HaikuHeadlessClient** — zastąpiono `execFile` + ręczne skanowanie PATH przez `spawn({ shell: true })`. Shell rozwiązuje PATH niezależnie od środowiska extension host. Komenda brana z `ccPanel.command` (identycznie jak TerminalManager). | `src/auto-accept/HaikuHeadlessClient.ts` |
+| 2026-04-25 | **Auto-Accept — usunięcie CircuitBreaker** — powodował fałszywe stopy przy powtarzalnych krótkich odpowiedziach Haiku (\"y\", \"continue\"). Usunięty z pipeline. | `src/auto-accept/AutoAcceptSession.ts`, `src/auto-accept/types.ts` |
+
+### Status
+- `tsc --noEmit` — czysto
+- `npm run build` — esbuild bundle OK (257 KB dev)
+- `cc-panel-0.0.20.vsix` — zbudowany
+- Marketplace — do wgrania
+
+---
+
+## [0.0.19] — 2026-04-25
+
+### Implemented
+
+| Czas | Zmiana | Pliki |
+|------|--------|-------|
+| 2026-04-25 | **Pulsowanie ramki przy pracy terminala** — gdy aktywny terminal jest w fazie `working`, cały frame panelu delikatnie pulsuje (inset box-shadow + border-color) w kolorze terminala. Zastąpiono pulsujący dot na chipie; chip zachowuje kolorowe tło. `data-phase` ustawiane na `.frame` w `renderDashboard()`. | `resources/webview/styles.css`, `resources/webview/main.js` |
+| 2026-04-25 | **Porządek w Command Palette** — z 18 usunięto z palety 7 komend wewnętrznych/keybinding-only (`selectTerminal1-4`, `cycleActive`, `reloadUserLists`, `launchSlot`). W palecie zostają 11 user-facing. Keybindingi nadal działają. | `package.json` |
+| 2026-04-25 | **Sekcja "Ostatnie" w chip QuickPick** — nowe pole `pickHistory` (max 10, LRU, dedup) śledzi wyłącznie wybory z chip menu. Pojawia się jako pierwsza sekcja "Ostatnie" przed "Historia (bar)". | `src/settings/UserListsStore.ts`, `src/extension.ts` |
+
+### Status
+- `tsc --noEmit` — czysto
+- `npm run build` — esbuild bundle OK
+- `cc-panel-0.0.19.vsix` — zbudowany
+- Marketplace — do wgrania
+
+---
+
 ## [0.0.12] — w sklepie (sesja 30, 2026-04-24)
 
 ### Implemented

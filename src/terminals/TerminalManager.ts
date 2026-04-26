@@ -121,6 +121,40 @@ export class TerminalManager implements vscode.Disposable {
     return this.terminals.get(id)?.terminal;
   }
 
+  /**
+   * Podłącza istniejący terminal VS Code (stworzony w poprzedniej sesji) pod dany slot.
+   * Nie spawnuje nowego procesu — terminal ma już działające CC z właściwym env.
+   */
+  reconnect(id: number, terminal: vscode.Terminal): void {
+    if (this.terminals.has(id)) return;
+    const closeSub = vscode.window.onDidCloseTerminal((t) => {
+      if (t !== terminal) return;
+      this.terminals.delete(id);
+      closeSub.dispose();
+      this.changedEmitter.fire(this.activeIds());
+    });
+    this.terminals.set(id, { id, terminal, subscriptions: [closeSub] });
+    this.changedEmitter.fire(this.activeIds());
+  }
+
+  /**
+   * Skanuje vscode.window.terminals w poszukiwaniu `CC #1`–`CC #4` i reconnectuje
+   * te które nie są jeszcze śledzone. Zwraca listę ID które zostały podłączone.
+   */
+  scanAndReconnect(): number[] {
+    const reconnected: number[] = [];
+    for (let id = 1; id <= 4; id++) {
+      if (this.terminals.has(id)) continue;
+      const name = `CC #${id}`;
+      const found = vscode.window.terminals.find((t) => t.name === name);
+      if (found) {
+        this.reconnect(id, found);
+        reconnected.push(id);
+      }
+    }
+    return reconnected;
+  }
+
   write(id: number, data: string): boolean {
     const terminal = this.terminals.get(id)?.terminal;
     if (!terminal) return false;

@@ -26,6 +26,10 @@ interface StateFileShape {
   phase?: string;
   session_id?: string | null;
   terminal_id?: number;
+  /** Pola zapisywane przez statusline hook — primarne źródło metryk (=to co CC pokazuje w statusline). */
+  model?: string;
+  cost_usd?: number;
+  ctx_pct?: number;
 }
 
 const TERMINAL_IDS: TerminalId[] = [1, 2, 3, 4];
@@ -151,12 +155,18 @@ export class StateWatcher implements vscode.Disposable {
     }
     console.log(`[cc-panel] StateWatcher T${id} refresh: transcript=${transcriptPath ?? "none"} metrics=${metrics ? `ctx=${metrics.ctxPct}% cost=$${metrics.costUsd.toFixed(3)}` : "null"} lastMsg=${state?.last_message?.slice(0, 30) ?? "none"}`);
 
+    // Priorytety: state.json (statusline hook = to co CC pokazuje) > TranscriptReader (fallback).
+    // totalTokens tylko z TranscriptReader — state.json nie ma skumulowanej sumy tokenów.
+    const costUsd = state?.cost_usd ?? metrics?.costUsd ?? null;
+    const ctxPct  = state?.ctx_pct  ?? metrics?.ctxPct  ?? null;
+    const model   = state?.model    ?? metrics?.model   ?? null;
+
     this.snapshots[id] = {
       id,
-      model: metrics?.model ?? null,
-      ctxPct: metrics ? metrics.ctxPct : null,
-      totalTokens: metrics ? metrics.totalTokens : null,
-      costUsd: metrics ? metrics.costUsd : null,
+      model,
+      ctxPct,
+      totalTokens: metrics?.totalTokens ?? null,
+      costUsd,
       lastMessage: state?.last_message ?? null,
       lastMessageAt: state?.last_message_at ?? null,
       phase: state?.phase ?? null,

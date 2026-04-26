@@ -18,11 +18,9 @@ export type AutoAcceptStopReason =
   | "time-limit"
   | "cost-limit"
   | "iter-limit"
-  | "circuit-breaker"
   | "user-stop"
   | "panel-dispose"
-  | "cli-errors"
-  | "idle-stop";
+  | "cli-errors";
 
 export interface IterationRecord {
   iter: number;
